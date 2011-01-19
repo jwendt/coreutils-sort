@@ -233,6 +233,7 @@ TESTS =						\
   misc/sort-continue				\
   misc/sort-debug-keys				\
   misc/sort-debug-warn				\
+  misc/sort-discrim				\
   misc/sort-files0-from				\
   misc/sort-float				\
   misc/sort-merge				\
