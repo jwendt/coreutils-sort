@@ -1737,13 +1737,13 @@ static int find_unit_order_discriminator (char *number, char** endptr)
   *endptr = number + minus_sign;
   int nonzero = 0;
   unsigned char ch;
-  
+
   /* Scan to end of number.
      Decimals or separators not followed by digits stop the scan.
      Numbers ending in decimals or separators are thus considered
      to be lacking in units.
      FIXME: add support for multibyte thousands_sep and decimal_point.  */
-  
+
   do
     {
       while (ISDIGIT (ch = *(*endptr)++))
@@ -1754,7 +1754,7 @@ static int find_unit_order_discriminator (char *number, char** endptr)
   if (ch == decimal_point)
     while (ISDIGIT (ch = *(*endptr)++))
       nonzero |= ch - '0';
-    
+
   if (nonzero)
     {
       int order = unit_order[ch];
@@ -1776,7 +1776,7 @@ numeric_discriminator (const char* data, const size_t length)
   double dbl_val;
   uintmax_t discrim, oflow;
   unsigned char ch;
-  
+
   /* Taken from find_unit_order but optimized for numeric_discriminator */
   while (blanks[to_uchar(*dataptr)])
     dataptr++;
@@ -1791,9 +1791,9 @@ numeric_discriminator (const char* data, const size_t length)
 
   if (ch == decimal_point)
     while (ISDIGIT (ch = *endptr++)){}
-  
+
   size_t len = endptr-dataptr;
-  
+
   if (len != length)
     {
       allocated = (char*) xmalloc(len+1);
@@ -1808,17 +1808,17 @@ numeric_discriminator (const char* data, const size_t length)
   /* return 0 if strod does not perform a conversion */
   if (dataptr == xendptr && dbl_val == 0)
     return 0x8000000000000000;
-  
+
   /* cast to uintmax_t */
   dbl_val = 100*dbl_val;
-  
+
   if (dbl_val > 0xFFFFFFFFFFFFFFFF)
       return 0xFFFFFFFFFFFFFFFF;
   else if (dbl_val < -0xFFFFFFFFFFFFFFFF)
       return 0;
-  
+
   discrim = (uintmax_t)(dbl_val);
-  
+
   if (dbl_val < 0)
     oflow = ~discrim;
   else
@@ -1827,7 +1827,7 @@ numeric_discriminator (const char* data, const size_t length)
   if (oflow & 0x8000000000000000)
   {
     if (dbl_val < 0)
-      return 0; 
+      return 0;
     else
       return 0xFFFFFFFFFFFFFFFF;
   }
@@ -1836,7 +1836,7 @@ numeric_discriminator (const char* data, const size_t length)
   discrim += 0x8000000000000000;
 
   free(allocated);
-  
+
   return discrim;
 }
 
@@ -1847,7 +1847,7 @@ human_numeric_discriminator (char* data, const size_t length)
 {
   /* The 8 bytes of the discriminator are used as follows:
      | 1 sign bit | 4 magnitude bits | 59 bits for integer representation |
-     Because positive numbers should be considered larger than negative, 
+     Because positive numbers should be considered larger than negative,
      the sign bit will be set to 1 for positive numbers, and 0 for negative
      numbers. To handle a single decimal place, the final number will be
      multiplied by 10. */
@@ -1863,19 +1863,19 @@ human_numeric_discriminator (char* data, const size_t length)
   magnitude = find_unit_order_discriminator(data, &endptr);
   if (magnitude < 0)
     magnitude = -magnitude;
-  
+
   mag = *endptr;
   *endptr = '\0';
-  
+
   dbl_val = strtod(data,&xendptr);
-  
+
   *endptr = mag;
-  
+
   if (data == xendptr && dbl_val == 0)
     return 0x8000000000000000;
-  
+
   dbl_val = 10*dbl_val;
-  
+
   if (dbl_val > 0x07FFFFFFFFFFFFFF)
     {
       discrim = magnitude;
@@ -1918,9 +1918,9 @@ human_numeric_discriminator (char* data, const size_t length)
   set_mag = magnitude;
   set_mag <<= 59;
   discrim |= set_mag;
-  
+
   discrim += 0x8000000000000000;
-  
+
   return discrim;
 }
 
@@ -1933,6 +1933,7 @@ general_numeric_discriminator (char* dest, const char* data)
      the sign bit will be set to 1 for positive numbers, and negative numbers
      will have all of their bits flipped. */
   double *doubleP = (double*)dest;
+  bool nanOrInf = false;
   uintmax_t *discrim;
   discrim = (uintmax_t*)malloc(sizeof(uintmax_t));
   memset(discrim,0,sizeof(uintmax_t));
@@ -1940,7 +1941,7 @@ general_numeric_discriminator (char* dest, const char* data)
   /* get the value as a double from the string */
   char * endptr;
   *doubleP = strtod(data,&endptr);
-  
+
   /* return 0 if strod does not perform a conversion */
   if (data == endptr)
     return 0;
@@ -1948,11 +1949,22 @@ general_numeric_discriminator (char* dest, const char* data)
   /* copy bytes from doubleP to discrim */
   memcpy(discrim, doubleP, sizeof(double));
 
-  /* if negative, flip every bit, otherwise, set the sign bit */
-  if((*discrim >> 63) == 1)
+  /* values of +/- inf, NaN have their float bits (bits 2-12) all set */
+  if(*discrim & 0x7FF0000000000000 != 0x7FF0000000000000)
+    nanOrInf = true;
+
+  /* if negative, flip every bit, otherwise, set the sign bit
+  if positive flip only the sign bit  */
+  if((*discrim >> 63) == 1 )
+  {
     *discrim = ~(*discrim);
+    /* if value was -inf or -NaN, the fraction bits need to be flipped
+    In order to preserve -NaN < -Inf < +Inf < NaN */
+    if(nanOrInf)
+        *discrim ^= 0x000FFFFFFFFFFFFF;
+  }
   else
-    *discrim += 0x8000000000000000;
+    *discrim ^= 0x8000000000000000;
 
   uintmax_t result = *discrim;
   free(discrim);
