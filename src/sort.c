@@ -182,6 +182,10 @@ struct line
   size_t length;		/* Length including final newline. */
   char *keybeg;			/* Start of first key. */
   char *keylim;			/* Limit of first key. */
+  /* Line discriminator.  A sorts before B if A->discrim < B->discrim,
+    and after B if A->discrim > B->discrim, but if two discrim values
+    are equal the lines may not necessarily compare equal.  */
+  uintmax_t discrim;		/* Discriminator for quick comparisons */
 };
 
 /* Input buffers. */
@@ -1684,6 +1688,162 @@ limfield (struct line const *line, struct keyfield const *key)
   return ptr;
 }
 
+/* A randomly chosen MD5 state, used for random comparison.  */
+static struct md5_ctx random_md5_state;
+
+static int getmonth (char const *, char **);
+
+/* Return true if KEY is a numeric key.  */
+
+static inline bool
+key_numeric (struct keyfield const *key)
+{
+  return key->numeric || key->general_numeric || key->human_numeric;
+}
+
+/* Return a discriminator for LINE, based on KEY.  If KEY is null,
+   it represents the entire line.  */
+
+static uintmax_t
+line_discriminator (struct line const *line, struct keyfield const *key)
+{
+  uintmax_t discrim;
+  char *ptr = line->text;
+  char *lim = ptr + line->length - 1;
+  char ch = '\0';
+  uint32_t dig[MD5_DIGEST_SIZE / sizeof (uint32_t)];
+  void *allocated IF_LINT (= NULL);
+  char *t;
+  size_t tlen;
+  char stackbuf[4000];
+
+  /* All known implementations of strxfrm, when faced with a buffer
+     that's too small, fill up the buffer anyway (even though POSIX
+     says they needn't), except perhaps for the last XFRM_JUNK bytes.
+     Currently we guess XFRM_JUNK to be 10, which is probably too
+     large, but better too large (and therefore inefficient) than too
+     small (and therefore incorrect).  */
+  enum { XFRM_JUNK = 10 };
+  char xfrmbuf[sizeof discrim + XFRM_JUNK];
+
+  if (key)
+    {
+      if (key->eword != SIZE_MAX)
+        lim = limfield (line, key);
+
+      if (key->sword != SIZE_MAX)
+        ptr = begfield (line, key);
+      else if (key->skipsblanks)
+        while (blanks[to_uchar (*ptr)])
+          ptr++;
+
+      lim = MAX (ptr, lim);
+
+      size_t len = lim - ptr;
+
+      bool const *ignore = key->ignore;
+      char const *translate = key->translate;
+
+      if (ignore || translate)
+        {
+          /* Compute with a copy of the key, which is the result
+             of translating or ignoring characters, and which need
+             its own storage.  */
+
+          size_t i;
+
+          /* Allocate space for copy.  */
+          size_t size = len + 1;
+          t = (size <= sizeof stackbuf
+               ? stackbuf
+               : (allocated = xmalloc (size)));
+
+          /* Put into the copy a version of the key in which the
+             requested characters are ignored or translated.  */
+          for (tlen = i = 0; i < len; i++)
+            if (! (ignore && ignore[to_uchar (ptr[i])]))
+              t[tlen++] = (translate
+                           ? translate[to_uchar (ptr[i])]
+                           : ptr[i]);
+          t[tlen] = '\0';
+        }
+      else
+        {
+          /* Use the keys in-place, temporarily null-terminated.  */
+          t = ptr; tlen = len; ch = *lim; *lim = '\0';
+        }
+
+      if (hard_LC_COLLATE || key_numeric (key)
+          || key->month || key->random || key->version)
+        {
+          if (key->numeric || key->general_numeric || key->human_numeric)
+            {
+              /* FIXME: Not yet implemented.  */
+              t = stackbuf;
+              tlen = 0;
+            }
+          else if (key->month)
+            {
+              xfrmbuf[0] = getmonth (t, NULL);
+              t = xfrmbuf;
+              tlen = 1;
+            }
+          else if (key->random)
+            {
+              struct md5_ctx s = random_md5_state;
+              md5_process_bytes (t, tlen, &s);
+              md5_finish_ctx (&s, dig);
+              t = (char *) dig;
+              tlen = sizeof dig;
+            }
+          else if (key->version)
+            {
+              /* FIXME: Not yet implemented.  */
+              t = stackbuf;
+              tlen = 0;
+            }
+          else
+            {
+              ptr = t;
+              lim = t + tlen;
+              goto compare_with_strxfrm;
+            }
+        }
+    }
+  else
+    {
+      if (hard_LC_COLLATE)
+        {
+          ch = *lim;
+          *lim = '\0';
+        compare_with_strxfrm:;
+          size_t xfrmlen = strxfrm (xfrmbuf, ptr, sizeof xfrmbuf);
+          t = xfrmbuf;
+          tlen = MIN (xfrmlen, sizeof discrim);
+        }
+      else
+        {
+          t = ptr;
+          tlen = lim - ptr;
+        }
+    }
+
+  discrim = 0;
+  for (size_t i = 0; i < sizeof discrim; i++)
+    {
+      discrim <<= CHAR_BIT;
+      if (i < tlen)
+        discrim += (unsigned char) t[i];
+    }
+
+  free (allocated);
+
+  if (ch)
+    *lim = ch;
+
+  return ((key ? key->reverse : reverse) ? ~discrim : discrim);
+}
+
 /* Fill BUF reading from FP, moving buf->left bytes from the end
    of buf->buf to the beginning first.  If EOF is reached and the
    file wasn't terminated by a newline, supply one.  Set up BUF's line
@@ -1754,6 +1914,7 @@ fillbuf (struct buffer *buf, FILE *fp, char const *file)
               line--;
               line->text = line_start;
               line->length = ptr - line_start;
+	      line->discrim = line_discriminator (line, key);
               mergesize = MAX (mergesize, line->length);
               avail -= line_bytes;
 
@@ -1974,7 +2135,7 @@ getmonth (char const *month, char **ea)
 }
 
 /* A randomly chosen MD5 state, used for random comparison.  */
-static struct md5_ctx random_md5_state;
+// static struct md5_ctx random_md5_state;
 
 /* Initialize the randomly chosen MD5 state.  */
 
@@ -2181,11 +2342,11 @@ mark_key (size_t offset, size_t width)
 
 /* Return true if KEY is a numeric key.  */
 
-static inline bool
+/*static inline bool
 key_numeric (struct keyfield const *key)
 {
   return key->numeric || key->general_numeric || key->human_numeric;
-}
+}*/
 
 /* For LINE, output a debugging line that underlines KEY in LINE.
    If KEY is null, underline the whole line.  */
@@ -2430,7 +2591,7 @@ keycompare (struct line const *a, struct line const *b)
   char *texta = a->keybeg;
   char *textb = b->keybeg;
   char *lima = a->keylim;
-  char *limb = b->keylim;
+  char *limb = b->keylim; 
 
   int diff;
 
