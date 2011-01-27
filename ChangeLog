@@ -1,0 +1,10 @@
+2011-1-26  Drew Kutilek  <dkutilek@ucla.edu>
+
+	* src/sort.c: Added uintmax_t discrim member to struct line.
+	* src/sort.c (line_discriminator): New function.  Returns discriminator
+	given line and key.
+	* src/sort.c (get_month): added function declaration above
+	line_discriminator so line_discriminator can call it.
+	* src/sort.c (keycompare): added call to line_discriminator
+	* src/sort.c (struct md5_ctx random_md5_state): added declaration above
+	line_discriminator so line_discriminator can call it.
