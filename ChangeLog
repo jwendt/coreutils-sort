@@ -1,14 +1,9 @@
-2011-1-26  Drew Kutilek  <dkutilek@ucla.edu>
+2011-1-28 James Wendt <jwendt@cs.ucla.edu>
 
-	* src/sort.c: Added uintmax_t discrim member to struct line.
-	* src/sort.c (line_discriminator): New function.  Returns discriminator
-	given line and key.
-	* src/sort.c (get_month): added function declaration above
-	line_discriminator so line_discriminator can call it.
-	* src/sort.c (keycompare): added call to line_discriminator
-	* src/sort.c (struct md5_ctx random_md5_state): added declaration above
-	line_discriminator so line_discriminator can call it.
-	
+	* ChangeLog: Changed ordering of this ChangeLog to follow the GNU Coding
+	Standards already in place. Newest updates are to be  appended to the
+	beginning of this document.
+
 2011-1-28 Drew Kutilek <dkutilek@ucla.edu>
 
 	* src/sort.c (human_numeric_discriminator): New function. Returns
@@ -19,3 +14,14 @@
 	previous to the old point.
 	* src/sort.c (find_unit_order): added declaration above
 	numeric_discriminator so numeric_discriminator can call it.
+
+2011-1-26  Drew Kutilek  <dkutilek@ucla.edu>
+
+	* src/sort.c: Added uintmax_t discrim member to struct line.
+	* src/sort.c (line_discriminator): New function.  Returns discriminator
+	given line and key.
+	* src/sort.c (get_month): added function declaration above
+	line_discriminator so line_discriminator can call it.
+	* src/sort.c (keycompare): added call to line_discriminator
+	* src/sort.c (struct md5_ctx random_md5_state): added declaration above
+	line_discriminator so line_discriminator can call it.
