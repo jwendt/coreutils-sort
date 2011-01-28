@@ -1701,6 +1701,306 @@ key_numeric (struct keyfield const *key)
   return key->numeric || key->general_numeric || key->human_numeric;
 }
 
+/* Return a char* to an 8 byte discriminator of the type numeric */
+
+static char*
+numeric_discriminator (char* dest, char* data, size_t length)
+{
+  /* The 8 bytes of the discriminator are used as follows:
+     | 1 sign bit | 63 bits for integer represenation |
+     Because positive numbers should be considered larger than negative,
+     the sign bit will be set to 1 for positie numbers, and 0 for negative
+     numbers.  Numbers are multiplied by 100 to include two decimal places.
+  */
+  bool positive = true;
+  size_t num_digit = 1, frac_digit = 1, j = 0;
+  int i = length-1;
+  uintmax_t fraction = 0, number = 0, power = 0, maximum = UINTMAX_MAX, overflow; /* 63 bits */
+  uintmax_t* discrim = (uintmax_t*)dest;
+  
+  maximum >>=1;
+  overflow = maximum ^ UINTMAX_MAX;
+  
+  while (i >= 0)
+    {
+      if (number & overflow)
+        {
+          /* Once overflow happens, scan for decimal point and signs */
+          while (i >= 0)
+            {
+              /* If a decimal point is found, save the last two digits
+                 and dump the rest. Continue with outer loop. */
+              if (data[i] == decimal_point)
+                {
+                  power = 2;
+                  for (j = i+1; j < length-1 && power > 0; j++)
+                    if (isdigit(data[i]))
+                      {
+                        if (power == 2)
+                          fraction = (data[j]-'0')*10;
+                        else
+                          fraction += (data[j]-'0');
+                        power--;
+                      }
+                  frac_digit = 3;
+                  number = 0;
+                  num_digit = 1;
+                  if (j > length-1)
+                    {
+                      fraction = 0;
+                      frac_digit = 1;
+                    }
+                  break;
+                }
+              /* If a positive sign is found, scan to make sure it is
+                 the end of the number. */
+              else if (data[i] == '+')
+                {
+                  positive == true;
+                  i--;
+                  while (i >= 0 && blanks[to_uchar (data[i])])
+                    i--;
+                  if (i < 0)
+                    break;
+                  else
+                    {
+                      number = fraction = 0;
+                      num_digit = frac_digit = 1;
+                    }
+                  break;
+                }
+              /* If a negative sign is found, scan to make sure it is
+                 the end of the number. */
+              else if (data[i] == '-')
+                {
+                  positive = false;
+                  i--;
+                  while (i >= 0 && blanks[to_uchar (data[i])])
+                    i--;
+                  if (i < 0)
+                    break;
+                  else
+                    {
+                      positive = true;
+                      number = fraction = 0;
+                      num_digit = frac_digit = 1;
+                    }
+                  break;
+                }
+              /* Thousands separators and blanks are allowed. If an unsupported
+                 character appears, start summation over from that point.*/
+              else if (data[i] != thousands_sep && !ISDIGIT(data[i]) && !blanks[to_uchar (data[i])])
+                {
+                  fraction = number = 0;
+                  num_digit = frac_digit = 1;
+                  break;
+                }
+              i--;
+            }
+          if (i < 0)
+            {
+              number = maximum;
+              goto done;
+            }
+          else
+            continue;
+        }
+      if (isdigit(data[i]))
+        {
+          power = 1;
+          for (j = 0; j < num_digit-1; j++)
+            power *= 10;
+          number += (data[i]-'0')*power;
+          num_digit++;
+        }
+      else if (data[i] == decimal_point)
+        {
+          fraction = number;
+          frac_digit = num_digit;
+          number = 0;
+          num_digit = 1;
+        }
+      /* A negative sign should be at the beginning of the line. If it is
+         not, it is considered an unsupported character, and the summation
+         starts over from that point. */
+      else if (data[i] == '-')
+        {
+          positive = false;
+          i--;
+          while (i >= 0 && blanks[to_uchar (data[i])])
+            i--;
+          if (i < 0)
+            break;
+          else
+            {
+              positive = true;
+              number = fraction = 0;
+              num_digit = frac_digit = 1;
+            }
+          continue;
+        }
+      /* A positive sign should be at the beginning of the line. If it is
+         not, it is considered an unsupported character, and the summation
+         starts over from that point. */
+      else if (data[i] == '+')
+        {
+          positive = true;
+          i--;
+          while (i >= 0 && blanks[to_uchar (data[i])])
+            i--;
+          if (i < 0)
+            break;
+          else
+            {
+              number = fraction = 0;
+              num_digit = frac_digit = 1;
+            }
+          continue;
+        }
+      /* Thousands separators and blanks are allowed. If an unsupported
+         character appears, start summation over from that point.*/
+      else if (data[i] != thousands_sep && !blanks[to_uchar (data[i])])
+        {
+          fraction = number = 0;
+          num_digit = frac_digit = 1;
+        }
+      i--;
+    }
+  
+  number *= 100;
+
+  if (frac_digit > 1)
+    {
+      if (frac_digit == 2)
+        {
+          number += fraction*10;
+        }
+      else
+        {
+          power = 1;
+          for (j = 0; j < frac_digit-2; j++)
+            power *= 10;
+          j = fraction/power;
+          fraction -= j*power;
+          power /= 10;
+          number += j*10 + fraction/power;
+        }
+    }
+    
+  if (number & overflow)
+    number = maximum;
+
+  done:    
+  
+  *discrim = 0;
+  
+  if (!positive && number != 0)
+    {
+      number = ~number;
+    }
+  else
+    {
+      *discrim |= overflow;
+    }
+    
+  *discrim |= (number & maximum);
+  return dest;
+}
+
+/* Table that maps characters to order-of-magnitude values.  */
+static char const unit_order[UCHAR_LIM] =
+  {
+#if ! ('K' == 75 && 'M' == 77 && 'G' == 71 && 'T' == 84 && 'P' == 80 \
+     && 'E' == 69 && 'Z' == 90 && 'Y' == 89 && 'k' == 107)
+    /* This initializer syntax works on all C99 hosts.  For now, use
+       it only on non-ASCII hosts, to ease the pain of porting to
+       pre-C99 ASCII hosts.  */
+    ['K']=1, ['M']=2, ['G']=3, ['T']=4, ['P']=5, ['E']=6, ['Z']=7, ['Y']=8,
+    ['k']=1,
+#else
+    /* Generate the following table with this command:
+       perl -e 'my %a=(k=>1, K=>1, M=>2, G=>3, T=>4, P=>5, E=>6, Z=>7, Y=>8);
+       foreach my $i (0..255) {my $c=chr($i); $a{$c} ||= 0;print "$a{$c}, "}'\
+       |fmt  */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 3,
+    0, 0, 0, 1, 0, 2, 0, 0, 5, 0, 0, 0, 4, 0, 0, 0, 0, 8, 7, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+#endif
+  };
+
+static int find_unit_order (char const *number);
+
+/* Return a char* to an 8 byte discriminator of the type human_numeric */
+
+static char*
+human_numeric_discriminator (char* dest, char* data, size_t length)
+{
+  /* The 8 bytes of the discriminator are used as follows:
+     | 1 sign bit | 4 magnitude bits | 59 bits for integer representation |
+     Because positive numbers should be considered larger than negative, 
+     the sign bit will be set to 1 for positive numbers, and 0 for negative
+     numbers. To handle a single decimal place, the final number will be
+     multiplied by 10. */
+
+  size_t len = length;
+  int magnitude;
+  uintmax_t maximum = UINTMAX_MAX, overflow,
+  set_mag, set_sign, number, clear;
+
+  while (blanks[to_uchar (*data)])
+    {
+      len--;
+      data++;
+    }
+  magnitude = find_unit_order(data);
+  if (magnitude < 0)
+    magnitude = -magnitude;
+  
+  numeric_discriminator(dest, data, len);
+  uintmax_t* discrim = (uintmax_t*)dest;
+  
+  maximum >>= 1;
+  set_sign = (UINTMAX_MAX) ^ maximum;
+  maximum >>= 4;
+  overflow = (UINTMAX_MAX>>1) ^ maximum;
+  
+  /* maximum  == 0x07FF FFFF FFFF FFFF 
+     set_sign == 0x8000 0000 0000 0000
+     overflow == 0x7800 0000 0000 0000 */
+  
+  clear = ~set_sign;
+
+  number = clear & *discrim;
+  
+  if (!(set_sign & *discrim))
+      number = ~number;
+    
+  number /= 10;
+  
+  if (overflow & number)
+      number = maximum;
+    
+  *discrim &= set_sign;
+  set_mag = magnitude;
+  set_mag <<= 59;
+  number |= set_mag;
+  
+  if (!(set_sign & *discrim))
+      number = ~number;
+    
+  *discrim |= number;
+
+  return (char*)discrim;
+}
+
 /* Return a discriminator for LINE, based on KEY.  If KEY is null,
    it represents the entire line.  */
 
@@ -1964,35 +2264,6 @@ fillbuf (struct buffer *buf, FILE *fp, char const *file)
       }
     }
 }
-
-/* Table that maps characters to order-of-magnitude values.  */
-static char const unit_order[UCHAR_LIM] =
-  {
-#if ! ('K' == 75 && 'M' == 77 && 'G' == 71 && 'T' == 84 && 'P' == 80 \
-     && 'E' == 69 && 'Z' == 90 && 'Y' == 89 && 'k' == 107)
-    /* This initializer syntax works on all C99 hosts.  For now, use
-       it only on non-ASCII hosts, to ease the pain of porting to
-       pre-C99 ASCII hosts.  */
-    ['K']=1, ['M']=2, ['G']=3, ['T']=4, ['P']=5, ['E']=6, ['Z']=7, ['Y']=8,
-    ['k']=1,
-#else
-    /* Generate the following table with this command:
-       perl -e 'my %a=(k=>1, K=>1, M=>2, G=>3, T=>4, P=>5, E=>6, Z=>7, Y=>8);
-       foreach my $i (0..255) {my $c=chr($i); $a{$c} ||= 0;print "$a{$c}, "}'\
-       |fmt  */
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 3,
-    0, 0, 0, 1, 0, 2, 0, 0, 5, 0, 0, 0, 4, 0, 0, 0, 0, 8, 7, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-#endif
-  };
 
 /* Return an integer that represents the order of magnitude of the
    unit following the number.  The number may contain thousands
