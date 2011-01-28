@@ -1914,7 +1914,7 @@ fillbuf (struct buffer *buf, FILE *fp, char const *file)
               line--;
               line->text = line_start;
               line->length = ptr - line_start;
-	      line->discrim = line_discriminator (line, key);
+              line->discrim = line_discriminator (line, key);
               mergesize = MAX (mergesize, line->length);
               avail -= line_bytes;
 
