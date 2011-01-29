@@ -180,8 +180,6 @@ struct line
 {
   char *text;			/* Text of the line. */
   size_t length;		/* Length including final newline. */
-  char *keybeg;			/* Start of first key. */
-  char *keylim;			/* Limit of first key. */
   /* Line discriminator.  A sorts before B if A->discrim < B->discrim,
     and after B if A->discrim > B->discrim, but if two discrim values
     are equal the lines may not necessarily compare equal.  */
@@ -2217,26 +2215,6 @@ fillbuf (struct buffer *buf, FILE *fp, char const *file)
               line->discrim = line_discriminator (line, key);
               mergesize = MAX (mergesize, line->length);
               avail -= line_bytes;
-
-              if (key)
-                {
-                  /* Precompute the position of the first key for
-                     efficiency.  */
-                  line->keylim = (key->eword == SIZE_MAX
-                                  ? p
-                                  : limfield (line, key));
-
-                  if (key->sword != SIZE_MAX)
-                    line->keybeg = begfield (line, key);
-                  else
-                    {
-                      if (key->skipsblanks)
-                        while (blanks[to_uchar (*line_start)])
-                          line_start++;
-                      line->keybeg = line_start;
-                    }
-                }
-
               line_start = ptr;
             }
 
@@ -2857,19 +2835,37 @@ keycompare (struct line const *a, struct line const *b)
 {
   struct keyfield *key = keylist;
 
-  /* For the first iteration only, the key positions have been
-     precomputed for us. */
-  char *texta = a->keybeg;
-  char *textb = b->keybeg;
-  char *lima = a->keylim;
-  char *limb = b->keylim; 
-
   int diff;
 
-  while (true)
+    do
     {
       char const *translate = key->translate;
       bool const *ignore = key->ignore;
+
+      char *texta;
+      char *textb;
+      char *lima;
+      char *limb;
+
+      /* Find the beginning and limit of the next field. */
+      if (key->eword != SIZE_MAX)
+        lima = limfield (a, key), limb = limfield (b, key);
+      else
+        lima = a->text + a->length - 1, limb = b->text + b->length - 1;
+
+      if (key->sword != SIZE_MAX)
+        texta = begfield (a, key), textb = begfield (b, key);
+      else
+        {
+          texta = a->text, textb = b->text;
+          if (key->skipsblanks)
+            {
+              while (texta < lima && blanks[to_uchar (*texta)])
+                ++texta;
+              while (textb < limb && blanks[to_uchar (*textb)])
+                ++textb;
+            }
+        }
 
       /* Treat field ends before field starts as empty fields.  */
       lima = MAX (texta, lima);
@@ -3045,6 +3041,7 @@ keycompare (struct line const *a, struct line const *b)
             }
         }
     }
+    while (key);
 
   return 0;
 
@@ -3062,6 +3059,9 @@ compare (struct line const *a, struct line const *b)
 {
   int diff;
   size_t alen, blen;
+
+  if (a->discrim != b->discrim)
+    return a->discrim < b->discrim ? -1 : 1;
 
   /* First try to compare on the specified keys (if any).
      The only two cases with no key at all are unadorned sort,
@@ -3209,11 +3209,7 @@ check (char const *file_name, char checkonly)
         }
       memcpy (temp.text, line->text, line->length);
       temp.length = line->length;
-      if (key)
-        {
-          temp.keybeg = temp.text + (line->keybeg - line->text);
-          temp.keylim = temp.text + (line->keylim - line->text);
-        }
+      temp.discrim = line->discrim;
     }
 
   xfclose (fp, file_name);
@@ -3349,14 +3345,8 @@ mergefps (struct sortfile *files, size_t ntemps, size_t nfiles,
                   saved.text = xmalloc (savealloc);
                 }
               saved.length = smallest->length;
+              saved.discrim = smallest->discrim;
               memcpy (saved.text, smallest->text, saved.length);
-              if (key)
-                {
-                  saved.keybeg =
-                    saved.text + (smallest->keybeg - smallest->text);
-                  saved.keylim =
-                    saved.text + (smallest->keylim - smallest->text);
-                }
             }
         }
       else

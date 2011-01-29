@@ -1,5 +1,19 @@
 2011-1-28 James Wendt <jwendt@cs.ucla.edu>
 
+	* src/sort.c (struct line): Replaced keybeg and keylim pointers with a
+	uintmax_t discriminator used for quick comparisons.
+	* src/sort.c (fillbuf): Removed precomputation of position of first key
+	since keybeg and keylim pointers are no longer in use.
+	* src/sort.c (keycompare): Computes begining and limit of key since it is no
+	longer precomputed in fillbuf.
+	* src/sort.c (compare): Checks if difference between discriminators is
+	non-zero, if so, return result, otherwise, function compares as before.
+	* src/sort.c (check): Load discrim instead of keybeg and keylim.
+	* src/sort.c (mergefps): Save discrim instead of keybeg and keylim.
+	
+
+2011-1-28 James Wendt <jwendt@cs.ucla.edu>
+
 	* ChangeLog: Changed ordering of this ChangeLog to follow the GNU Coding
 	Standards already in place. Newest updates are to be  appended to the
 	beginning of this document.
