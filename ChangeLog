@@ -1,3 +1,10 @@
+2011-1-29 James Wendt <jwendt@cs.ucla.edu>
+
+	* src/sort.c (general_numeric_discriminator): New function. Returns
+	discriminator for general numeric key.
+	* src/sort.c (line_discriminator): Calls function to calculate
+	discriminator according to key.
+
 2011-1-28 James Wendt <jwendt@cs.ucla.edu>
 
 	* src/sort.c (struct line): Replaced keybeg and keylim pointers with a
@@ -10,7 +17,6 @@
 	non-zero, if so, return result, otherwise, function compares as before.
 	* src/sort.c (check): Load discrim instead of keybeg and keylim.
 	* src/sort.c (mergefps): Save discrim instead of keybeg and keylim.
-	
 
 2011-1-28 James Wendt <jwendt@cs.ucla.edu>
 

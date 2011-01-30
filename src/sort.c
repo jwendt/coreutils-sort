@@ -1999,6 +1999,29 @@ human_numeric_discriminator (char* dest, char* data, size_t length)
   return (char*)discrim;
 }
 
+/* Return a char* to an 8 byte discriminator of the type general_numeric */
+
+static char*
+general_numeric_discriminator (char* dest, char* data)
+{
+  /* Because positive numbers should be considered larger than negative,
+     the sign bit will be set to 1 for positive numbers, and negative numbers
+     will have all of their bits flipped. */
+  double *doubleP = (double*)dest;
+  uintmax_t *discrim = (uintmax_t*)dest;
+  
+  /* get the value as a double from the string */
+  *doubleP = strtod(data,NULL);
+
+  /* if negative, flip every bit, otherwise, set the sign bit */
+  if((*discrim >> 63) == 1)
+    *discrim = ~(*discrim);
+  else
+    *discrim += 0x8000000000000000;
+
+  return dest;
+}
+
 /* Return a discriminator for LINE, based on KEY.  If KEY is null,
    it represents the entire line.  */
 
@@ -2074,11 +2097,23 @@ line_discriminator (struct line const *line, struct keyfield const *key)
       if (hard_LC_COLLATE || key_numeric (key)
           || key->month || key->random || key->version)
         {
-          if (key->numeric || key->general_numeric || key->human_numeric)
+          if (key->numeric)
             {
-              /* FIXME: Not yet implemented.  */
-              t = stackbuf;
-              tlen = 0;
+              numeric_discriminator(xfrmbuf,t,len);
+              t = xfrmbuf;
+              tlen = sizeof discrim;
+            }
+          else if (key->human_numeric)
+            {
+              human_numeric_discriminator(xfrmbuf,t,len);
+              t = xfrmbuf;
+              tlen = sizeof discrim;
+            }
+          else if (key->general_numeric)
+            {
+              general_numeric_discriminator(xfrmbuf,t);
+              t = xfrmbuf;
+              tlen = sizeof discrim;
             }
           else if (key->month)
             {
@@ -3060,10 +3095,11 @@ compare (struct line const *a, struct line const *b)
   int diff;
   size_t alen, blen;
 
+  /* First try to compare on the discriminators */
   if (a->discrim != b->discrim)
     return a->discrim < b->discrim ? -1 : 1;
 
-  /* First try to compare on the specified keys (if any).
+  /* Next try to compare on the specified keys (if any).
      The only two cases with no key at all are unadorned sort,
      and unadorned sort -r. */
   if (keylist)
