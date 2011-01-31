@@ -1986,7 +1986,7 @@ human_numeric_discriminator (char* dest, const char* data, const size_t length)
   number = clear & *discrim;
   
   if (!(set_sign & *discrim))
-      number = ~number;
+      number = (~number & clear);
     
   number /= 10;
   
@@ -1999,7 +1999,7 @@ human_numeric_discriminator (char* dest, const char* data, const size_t length)
   number |= set_mag;
   
   if (!(set_sign & *discrim))
-      number = ~number;
+      number = (~number & clear);
     
   *discrim |= number;
 
