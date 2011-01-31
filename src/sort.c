@@ -2155,7 +2155,7 @@ line_discriminator (struct line const *line, struct keyfield const *key)
         }
     }
 
-  if( key ? !(key->numeric || key->human_numeric || key->general_numeric) : 1 )
+  if( key ? !(key->numeric || key->human_numeric ) : 1 )
     {
       for (size_t i = 0; i < sizeof discrim; i++)
         {
