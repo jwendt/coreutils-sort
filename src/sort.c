@@ -2180,6 +2180,262 @@ line_discriminator (struct line const *line, struct keyfield const *key)
   return ((key ? key->reverse : reverse) ? ~discrim : discrim);
 }
 
+
+/* --------- file version discriminator --------- */
+
+/* there are two versions of the discriminator, neither of which
+   will work like the other discriminators.
+
+   because the version comparing algorithm is quite complicated,
+   we have been unable to devise a discriminator that will 
+   behave as we have intended, that is, to allow ordering of 
+   lines based on the discriminator, and to default to existing
+   implementation if overflow occurs. 
+
+   both versions of the discriminator cannot guarantee that the
+   maximum discrimnator value, i.e. all bits set to 1, represents
+   a line that should compare greater than a line with a smaller
+   discriminator. as such, a special check needs to be used when
+   sorting in version mode.
+
+   this check is implemented for the first version as 
+   version_discrim_cmp (uintmax_t a, uintmax_t b)
+
+   the first version currently does not produce output equal to
+   the existing program. the latter seems to sometimes 
+   produce results that are incorrect. for example, according to 
+   the rules found on Debian's website (address is found in 
+   filevercmp.c, which is what the sort currently uses), the entry
+   a.1a should come before a1.a, but the current sort produces the
+   opposite result. 
+
+   i will investigate why this happens and determine whether it's
+   a bug, or if our interpretation of Debian's rules is incorrect.
+
+   the first version, when tested against a 10 million entry file
+   showed a 20% performance gain. however, the entries in this file
+   are largely random, and are very likely to be different early
+   in the string. sorting version numbers that have mostly a 
+   common prefix will be either as slow as the current sort,
+   or even slower because of the overhead incurred calculating
+   the discriminant.
+
+   the second version shows a performance loss under all 
+   circumstances, even with data tailored to fit within the 
+   discriminator, and as such is not very promising, even
+   though it produces results consistent with the current
+   program.
+*/
+
+static inline int
+version_discrim_cmp(uintmax_t a, uintmax_t b)
+{
+  uintmax_t masks[] = { 9007199254740992UL, 17592186044416UL, 17179869184UL, 16777216UL, 16384UL, 16UL };
+  uintmax_t masks2[] = { !(1125899906842623UL), !(1099511627775UL), !(1073741823UL), !(1048575UL), !(1023UL) };
+  int p=0;
+
+  for(int i=0; i<6; i++)
+  {
+    if(masks[i]&a || masks[i]&b)
+    {
+      p=i;
+      uintmax_t x = masks2[i]&a;
+      uintmax_t y = masks2[i]&b;
+      x = x >> (4 + i*10);
+      y = y >> (4 + i*10);
+      if(x>y)
+        return 1;
+      else if(y>x)
+        return -1;
+      else
+        return 0;
+    }
+  }
+
+  if(a>b)
+    return 1;
+  else if(b>a)
+    return -1;
+  else
+    return 0;
+}
+
+static inline int parseInt(char* begin, int length)
+{
+  char tmp = begin[length];
+  begin[length] = 0;
+  int r = atoi(begin);
+  begin[length] = tmp;
+  return r; 
+}
+
+static uintmax_t
+version_discriminator (char* data)
+{
+  /*  1bit : 0 means the following 8bits represent a numeric value, 
+             1 means the following 8bits represents an ASCII value (because alphabet > numbers)
+      8bits: represents the ASCII or numeric value
+      1bit : 0 represents end of component, 1 means the component continues
+
+      we call these sections the alpha-numeric bit, the value bits, 
+      and the end-of-component (eoc) bit, respectively.
+      we also define X(a,b) to be the number constructed by the bits in X from 
+      position a to b inclusive. e.g. if A = 11101010, then A(0,3)=1110
+
+      The algorithm to figure out the ordering goes as follows:
+      version_compare(discrim A, discrim B){
+        start with x=0
+
+        shift both A and B from x until we reach the first eoc bit that is set to 0 
+        (thus the end of a component), call this position y.
+
+        compare A(x,y) and B(x,y)
+          if they are both all 1's, then break out to default string 
+            comparisons since one of the values could be beyond the max
+          if they are the same, set x=y+1, then repeat the process
+          if they are different, return the results
+      }    
+  */
+
+  uintmax_t discrim = 0;
+  char pos=0;
+  unsigned int chunk = 0;
+  int numstart=0;
+  int chnkcnt=0;
+  bool innum=false;
+  
+  for(int i=0;data[i]!=0;i++)
+  {
+    if(isdigit(data[i]))
+    {
+      if(!innum)
+      {
+        innum=true;
+        numstart=i;
+      }
+    
+      if(!isdigit(data[i+1]))
+      {
+        innum=false;
+        int r = parseInt(data+numstart, i+1-numstart);
+        chunk = 512;
+        chunk += r << 1;
+        
+        if(data[i+1]=='.' || data[i+1] == 0)
+          chunk += 1;
+        discrim += chunk << (54 - chnkcnt*10);
+        chnkcnt++;
+      }
+    }
+    else if(data[i]!='.')
+    { 
+      chunk = data[i] << 23;
+
+      if(data[i+1]=='.' || data[i+1] == 0)
+        chunk += 4194304;
+      discrim += chunk << (32 - chnkcnt*10);
+      chnkcnt++;
+    }
+
+    if(chnkcnt >= 5)
+      break;
+
+    i++;
+  }  
+
+  return discrim;
+}
+
+static uintmax_t
+version_discriminator2 (char* data)
+{
+  /*  
+      The representation is as such: 5 bits for the major version number
+      (epoch), 29 for the second number, and 30 for the third.
+      Only pure numerical version numbers, separated by periods will be 
+      considered. All version numbers with letters or special chars, and 
+      numerical ones that are too big to fit in its slot will have a 
+      representation of all 1's.
+
+      As such, entries with the discriminator set to all 1's will need to be
+      detected and passed onto the default implementation. This incurs 1 extra
+      boolean comparison for all sorts (regardless of option) to detect that the
+      sort mode is -V, and 2 more int comparisons on top of that when actually
+      running in -V.
+  */
+
+
+  // vars
+  uintmax_t discrim = 0;
+  int first_dot_idx = -1;
+  int second_dot_idx = -1;
+  int i;
+  uintmax_t major_version = 0;
+  uintmax_t second_version = 0;
+  uintmax_t third_version = 0;
+  bool good_format = true;
+
+  // go through the string once to see if it is of the format accepted, and 
+  // find the positions of the 1st and 2nd periods
+  for(i=0; data[i]!=0; i++)
+  {
+    if(!(data[i] >= 48 && data[i] <= 57))
+    {
+      if(data[i] != '.')
+      {
+        if(first_dot_idx < 0)
+          first_dot_idx = i;
+        else
+          second_dot_idx = i;
+      }
+      else
+      {
+        good_format = false;
+        break;
+      }
+    }
+  }
+
+  // if not of the accepted format, set discrim to all 1's
+  if(!good_format)
+  {
+    discrim = !discrim;
+  }
+  // otherwise parse it into the representation discussed
+  else
+  {
+    if(first_dot_idx == 0)
+      major_version = 0; // if the 1st char is a dot, major ver isnt stated, assume 0
+    else if(first_dot_idx > 0)
+    {
+      data[first_dot_idx] = 0; // change dot to 0 so atoi will only read up to there
+      major_version = atoi(data);
+
+      if(second_dot_idx > 0) // only parse 3rd number if there's a 2nd dot
+      {
+        data[second_dot_idx] = 0; // for atoi, same as above
+        third_version = atoi(&data[second_dot_idx+1]);
+      }
+
+      second_version = atoi(&data[first_dot_idx+1]);
+    }
+    else if(first_dot_idx < 0) // if there aren't any dots, the whole thing's the major version
+      major_version = atoi(data);
+    
+    // check that the numbers fit
+    if(major_version < 32 && second_version < 536870912 && third_version < 1073741824)
+      discrim = (major_version << 59) + (second_version << 30) + third_version;
+    else
+      discrim = !discrim;
+  }
+
+  return discrim;
+}
+
+/* --------- --------------------------- --------- */
+
+
+
 /* Fill BUF reading from FP, moving buf->left bytes from the end
    of buf->buf to the beginning first.  If EOF is reached and the
    file wasn't terminated by a newline, supply one.  Set up BUF's line
