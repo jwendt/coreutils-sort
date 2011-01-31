@@ -1803,6 +1803,7 @@ numeric_discriminator (char* dest, const char* data, const size_t length)
           else
             continue;
         }
+      
       if (isdigit(data[i]))
         {
           power = 1;
@@ -1864,6 +1865,12 @@ numeric_discriminator (char* dest, const char* data, const size_t length)
         }
       i--;
     }
+    
+  if (number & overflow)
+  {
+    number = maximum;
+    goto done;
+  }
   
   number *= 100;
 
