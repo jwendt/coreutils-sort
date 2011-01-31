@@ -1701,8 +1701,8 @@ key_numeric (struct keyfield const *key)
 
 /* Return a char* to an 8 byte discriminator of the type numeric */
 
-static char*
-numeric_discriminator (char* dest, char* data, size_t length)
+static uintmax_t
+numeric_discriminator (char* dest, const char* data, const size_t length)
 {
   /* The 8 bytes of the discriminator are used as follows:
      | 1 sign bit | 63 bits for integer represenation |
@@ -1900,9 +1900,9 @@ numeric_discriminator (char* dest, char* data, size_t length)
     {
       *discrim |= overflow;
     }
-    
+
   *discrim |= (number & maximum);
-  return dest;
+  return *discrim;
 }
 
 /* Table that maps characters to order-of-magnitude values.  */
@@ -1938,8 +1938,8 @@ static int find_unit_order (char const *number);
 
 /* Return a char* to an 8 byte discriminator of the type human_numeric */
 
-static char*
-human_numeric_discriminator (char* dest, char* data, size_t length)
+static uintmax_t
+human_numeric_discriminator (char* dest, const char* data, const size_t length)
 {
   /* The 8 bytes of the discriminator are used as follows:
      | 1 sign bit | 4 magnitude bits | 59 bits for integer representation |
@@ -1996,13 +1996,13 @@ human_numeric_discriminator (char* dest, char* data, size_t length)
     
   *discrim |= number;
 
-  return (char*)discrim;
+  return *discrim;
 }
 
 /* Return a char* to an 8 byte discriminator of the type general_numeric */
 
-static char*
-general_numeric_discriminator (char* dest, char* data)
+static uintmax_t
+general_numeric_discriminator (char* dest, const char* data)
 {
   /* Because positive numbers should be considered larger than negative,
      the sign bit will be set to 1 for positive numbers, and negative numbers
@@ -2019,7 +2019,7 @@ general_numeric_discriminator (char* dest, char* data)
   else
     *discrim += 0x8000000000000000;
 
-  return dest;
+  return *discrim;
 }
 
 /* Return a discriminator for LINE, based on KEY.  If KEY is null,
@@ -2028,7 +2028,7 @@ general_numeric_discriminator (char* dest, char* data)
 static uintmax_t
 line_discriminator (struct line const *line, struct keyfield const *key)
 {
-  uintmax_t discrim;
+  uintmax_t discrim = 0;
   char *ptr = line->text;
   char *lim = ptr + line->length - 1;
   char ch = '\0';
@@ -2099,21 +2099,15 @@ line_discriminator (struct line const *line, struct keyfield const *key)
         {
           if (key->numeric)
             {
-              numeric_discriminator(xfrmbuf,t,len);
-              t = xfrmbuf;
-              tlen = sizeof discrim;
+              discrim = numeric_discriminator(xfrmbuf,t,len);
             }
           else if (key->human_numeric)
             {
-              human_numeric_discriminator(xfrmbuf,t,len);
-              t = xfrmbuf;
-              tlen = sizeof discrim;
+              discrim = human_numeric_discriminator(xfrmbuf,t,len);
             }
           else if (key->general_numeric)
             {
-              general_numeric_discriminator(xfrmbuf,t);
-              t = xfrmbuf;
-              tlen = sizeof discrim;
+              discrim = general_numeric_discriminator(xfrmbuf,t);
             }
           else if (key->month)
             {
@@ -2161,12 +2155,14 @@ line_discriminator (struct line const *line, struct keyfield const *key)
         }
     }
 
-  discrim = 0;
-  for (size_t i = 0; i < sizeof discrim; i++)
+  if( key ? !(key->numeric || key->human_numeric || key->general_numeric) : 1 )
     {
-      discrim <<= CHAR_BIT;
-      if (i < tlen)
-        discrim += (unsigned char) t[i];
+      for (size_t i = 0; i < sizeof discrim; i++)
+        {
+          discrim <<= CHAR_BIT;
+          if (i < tlen)
+            discrim += (unsigned char) t[i];
+        }
     }
 
   free (allocated);

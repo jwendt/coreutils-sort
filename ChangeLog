@@ -1,3 +1,14 @@
+2011-1-30 James Wendt <jwendt@cs.ucla.edu>
+
+	* src/sort.c (numeric_discriminator): Changed output type from char* to
+	uintmax_t.
+	* src/sort.c (human_numeric_discriminator): Changed output type from char*
+	to uintmax_t.
+	* src/sort.c (general_numeric_discriminator): Changed output type from
+	char* to uintmax_t.
+	* src/sort.c (line_discriminator): Changed byte shuffling to apply only to
+	non-numeric keys.
+
 2011-1-29 James Wendt <jwendt@cs.ucla.edu>
 
 	* src/sort.c (general_numeric_discriminator): New function. Returns
