@@ -2112,11 +2112,11 @@ line_discriminator (struct line const *line, struct keyfield const *key)
         {
           if (key->numeric)
             {
-              discrim = numeric_discriminator(xfrmbuf,t,len);
+              discrim = numeric_discriminator(xfrmbuf,t,tlen);
             }
           else if (key->human_numeric)
             {
-              discrim = human_numeric_discriminator(xfrmbuf,t,len);
+              discrim = human_numeric_discriminator(xfrmbuf,t,tlen);
             }
           else if (key->general_numeric)
             {
