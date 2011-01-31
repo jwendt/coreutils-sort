@@ -2015,10 +2015,16 @@ general_numeric_discriminator (char* dest, const char* data)
      the sign bit will be set to 1 for positive numbers, and negative numbers
      will have all of their bits flipped. */
   double *doubleP = (double*)dest;
-  uintmax_t *discrim = (uintmax_t*)dest;
-  
+  uintmax_t *discrim;
+  discrim = (uintmax_t*)malloc(sizeof(uintmax_t));
+  memset(discrim,0,sizeof(uintmax_t));
+
+  /* FIXME: non-general-numeric values should NOT be treated as 0.0 */
   /* get the value as a double from the string */
   *doubleP = strtod(data,NULL);
+
+  /* copy bytes from doubleP to discrim */
+  memcpy(discrim, doubleP, sizeof(double));
 
   /* if negative, flip every bit, otherwise, set the sign bit */
   if((*discrim >> 63) == 1)
@@ -2162,7 +2168,7 @@ line_discriminator (struct line const *line, struct keyfield const *key)
         }
     }
 
-  if( key ? !(key->numeric || key->human_numeric ) : 1 )
+  if( key ? !(key->numeric || key->human_numeric || key->general_numeric ) : 1 )
     {
       for (size_t i = 0; i < sizeof discrim; i++)
         {
