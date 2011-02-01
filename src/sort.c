@@ -2046,7 +2046,7 @@ line_discriminator (struct line const *line, struct keyfield const *key)
   char *lim = ptr + line->length - 1;
   char ch = '\0';
   uint32_t dig[MD5_DIGEST_SIZE / sizeof (uint32_t)];
-  void *allocated IF_LINT (= NULL);
+  void *allocated = NULL;
   char *t;
   size_t tlen;
   char stackbuf[4000];

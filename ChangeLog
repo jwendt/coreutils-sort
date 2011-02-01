@@ -1,4 +1,8 @@
 2011-1-31 Drew Kutilek <dkutilek@ucla.edu>
+	* src/sort.c (line_discriminator): Fixed error with "/tests/misc/sort-compress".
+	Program no longer dumps core due to an unallocated pointer being freed.
+
+2011-1-31 Drew Kutilek <dkutilek@ucla.edu>
 	* src/sort.c (human_numeric_discriminator): Fixed error with negative
 	numbers.  Program now passes all -h tests in "/tests/misc/sort".  Program
 	only fails -g options now.
