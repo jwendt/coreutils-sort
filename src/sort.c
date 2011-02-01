@@ -2019,9 +2019,13 @@ general_numeric_discriminator (char* dest, const char* data)
   discrim = (uintmax_t*)malloc(sizeof(uintmax_t));
   memset(discrim,0,sizeof(uintmax_t));
 
-  /* FIXME: non-general-numeric values should NOT be treated as 0.0 */
   /* get the value as a double from the string */
-  *doubleP = strtod(data,NULL);
+  char * endptr;
+  *doubleP = strtod(data,&endptr);
+  
+  /* return 0 if strod does not perform a conversion */
+  if (data == endptr)
+    return 0;
 
   /* copy bytes from doubleP to discrim */
   memcpy(discrim, doubleP, sizeof(double));
