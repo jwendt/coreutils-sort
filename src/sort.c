@@ -1858,149 +1858,6 @@ general_numeric_discriminator (char* dest, const char* data)
   return result;
 }
 
-
-/* --------- file version discriminator --------- */
-
-char new_map[128] = { 1,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,
-                      81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,
-                      96,97,98,99,100,101,102,103,104,105,106,107,108,
-                      109,110,2,3,4,5,6,7,8,9,10,11,111,112,113,114,
-                      115,116,117,12,13,14,15,16,17,18,19,20,21,22,23,
-                      24,25,26,27,28,29,30,31,32,33,34,35,36,37,118,119,
-                      120,121,122,123,38,39,40,41,42,43,44,45,46,47,48,
-                      49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,124,
-                      125,126,0,127 };
-
-static inline unsigned char reencode(char a)
-{
-  /* stuff should be sorted in this order:
-      ~
-      digits
-      letters
-      everything else
-  */
-
-  if(a>=0 && a<128)
-    return new_map[a];
-  else
-    return a;
-}
-
-/* Match a file suffix defined by this regular expression:
-   /(\.[A-Za-z~][A-Za-z0-9~]*)*$/
-   Scan the string *STR and return a pointer to the matching suffix, or
-   NULL if not found.  Upon return, *STR points to terminating NUL.  */
-static inline char *
-match_suffix (char **str)
-{
-  char *match = NULL;
-  bool read_alpha = false;
-  while (**str)
-    {
-      if (read_alpha)
-        {
-          read_alpha = false;
-          if (!isalpha (**str) && '~' != **str)
-            match = NULL;
-        }
-      else if ('.' == **str)
-        {
-          read_alpha = true;
-          if (!match)
-            match = *str;
-        }
-      else if (!isalnum (**str) && '~' != **str)
-        match = NULL;
-      (*str)++;
-    }
-  return match;
-}
-
-static uintmax_t
-version_discriminator (char* s1)
-{
-  uintmax_t discrim = 723401728380767UL;
-  
-  // cut the suffix off
-  char *s1_pos;
-  char *s1_suffix;
-  size_t s1_len;
-
-  s1_pos = s1;
-  s1_suffix = match_suffix (&s1_pos);
-  if(s1_suffix)
-    *s1_suffix=0;
-
-  // get rid of leading zeroes in any numerals
-  bool isNum = false;
-  int zeroCnt = 0;
-
-  for(int i=0; s1[i]!=0; i++)
-  {
-    if(isdigit(s1[i]))
-    {
-      if(!isNum)
-        isNum = true;
-      if(isNum)
-      {
-        if(s1[i]=='0')
-          zeroCnt++;
-        else if(zeroCnt > 0)
-        {
-          strcpy(&s1[i-zeroCnt], &s1[i]);
-          i-=zeroCnt-1;
-          zeroCnt=0;
-          
-          if(i>=8) // we don't need more than 8 chars for the discrim
-            break;
-        }
-        else if(i>=8)
-          break; 
-      }    
-    }
-    else
-    {
-      if(isNum)
-      {
-        isNum=false;
-        if(zeroCnt > 0)
-        {
-          if(s1[i]!=0)
-          {
-            strcpy(&s1[i-zeroCnt+1],&s1[i]);
-            i-=zeroCnt-2;
-            zeroCnt=0;
-
-            if(i>=8)
-              break;
-          }
-          else
-          {
-            s1[i-zeroCnt+1] = 0;
-            break;
-          }
-        }
-      }
-      else if(i>=8)
-        break;
-    }
-  }
-
-  // build the 8 byte discrim using the 1st 8 chars that remain. 
-  // if there are less than 8, the other positions are set to nul
-  // note the encoding for nul is 1 in the special scheme we're using
-  // this was done when initialising discrim
-  for(int i=0;s1[i]!=0;i++)
-  {
-    uintmax_t x = reencode(s1[i]);
-    discrim &= x<<(8*(8-i-1));
-  }
-  
-  return discrim;
-}
-/* --------- --------------------------- --------- */
-
-
 /* Return a discriminator for LINE, based on KEY.  If KEY is null,
    it represents the entire line.  */
 
@@ -2096,7 +1953,8 @@ line_discriminator (struct line const *line, struct keyfield const *key)
             }
           else if (key->version)
             {
-              discrim = version_discriminator(xfrmbuf);
+              // discrim = version_discriminator(xfrmbuf);
+              discrim = 0;
             }
           else if (key->random)
             {
