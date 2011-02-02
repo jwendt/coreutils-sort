@@ -2098,7 +2098,7 @@ match_suffix (char **str)
 static uintmax_t
 version_discriminator (char* s1)
 {
-  uintmax_t discrim = (16843009UL<<32)+16843009UL;
+  uintmax_t discrim = 723401728380767UL;
   
   // cut the suffix off
   char *s1_pos;
