@@ -1811,7 +1811,10 @@ numeric_discriminator (const char* data, const size_t length)
 
   /* cast to uintmax_t */
   dbl_val = 100*dbl_val;
-  discrim = (uintmax_t)(dbl_val);\
+  discrim = (uintmax_t)(dbl_val);
+  
+  if (discrim & 0x8000000000000000)
+    discrim = 0x7FFFFFFFFFFFFFFF;
 
   /* flip last bit to put negative numbers at bottom of uint */
   discrim += 0x8000000000000000;
@@ -1855,6 +1858,10 @@ human_numeric_discriminator (char* data, const size_t length)
   
   dbl_val = 10*dbl_val;
   discrim = (uintmax_t)(dbl_val);
+  
+  if (discrim & 0x7800000000000000)
+    discrim = 0x07FFFFFFFFFFFFFF;
+  
   if (dbl_val < 0)
       magnitude = ~magnitude;
 
