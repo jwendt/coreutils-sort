@@ -1,3 +1,8 @@
+2011-2-2 James Wendt <jwendt@cs.ucla.edu>
+	* src/sort.c (numeric_discriminator): Replaced entire function with much
+	simpler implementation. Major performance (runtime) increase.
+	* src/sort.c (general_numeric_discriminator): Fixed memory leak.
+
 2011-2-1 Drew Kutilek <dkutilek@ucla.edu>
 	* test-case-generators/numeric_generator.c: Added test case generator
 	for numeric_discriminator.

@@ -1704,210 +1704,28 @@ key_numeric (struct keyfield const *key)
 static uintmax_t
 numeric_discriminator (char* dest, const char* data, const size_t length)
 {
-  /* The 8 bytes of the discriminator are used as follows:
-     | 1 sign bit | 63 bits for integer represenation |
-     Because positive numbers should be considered larger than negative,
-     the sign bit will be set to 1 for positie numbers, and 0 for negative
-     numbers.  Numbers are multiplied by 100 to include two decimal places.
-  */
-  bool positive = true;
-  size_t num_digit = 1, frac_digit = 1, j = 0;
-  int i = length-1;
-  uintmax_t fraction = 0, number = 0, power = 0, maximum = 0x7FFFFFFFFFFFFFFF,
-  overflow = 0x8000000000000000;
-  uintmax_t* discrim = (uintmax_t*)dest;
-  
-  while (i >= 0)
-    {
-      if (number & overflow)
-        {
-          /* Once overflow happens, scan for decimal point and signs */
-          while (i >= 0)
-            {
-              /* If a decimal point is found, save the last two digits
-                 and dump the rest. Continue with outer loop. */
-              if (data[i] == decimal_point)
-                {
-                  power = 2;
-                  for (j = i+1; j < length-1 && power > 0; j++)
-                    if (isdigit(data[i]))
-                      {
-                        if (power == 2)
-                          fraction = (data[j]-'0')*10;
-                        else
-                          fraction += (data[j]-'0');
-                        power--;
-                      }
-                  frac_digit = 3;
-                  number = 0;
-                  num_digit = 1;
-                  if (j > length-1)
-                    {
-                      fraction = 0;
-                      frac_digit = 1;
-                    }
-                  break;
-                }
-              /* If a positive sign is found, scan to make sure it is
-                 the end of the number. */
-              else if (data[i] == '+')
-                {
-                  positive == true;
-                  i--;
-                  while (i >= 0 && blanks[to_uchar (data[i])])
-                    i--;
-                  if (i < 0)
-                    break;
-                  else
-                    {
-                      number = fraction = 0;
-                      num_digit = frac_digit = 1;
-                    }
-                  break;
-                }
-              /* If a negative sign is found, scan to make sure it is
-                 the end of the number. */
-              else if (data[i] == '-')
-                {
-                  positive = false;
-                  i--;
-                  while (i >= 0 && blanks[to_uchar (data[i])])
-                    i--;
-                  if (i < 0)
-                    break;
-                  else
-                    {
-                      positive = true;
-                      number = fraction = 0;
-                      num_digit = frac_digit = 1;
-                    }
-                  break;
-                }
-              /* Thousands separators and blanks are allowed. If an unsupported
-                 character appears, start summation over from that point.*/
-              else if (data[i] != thousands_sep && !ISDIGIT(data[i]) && !blanks[to_uchar (data[i])])
-                {
-                  fraction = number = 0;
-                  num_digit = frac_digit = 1;
-                  break;
-                }
-              i--;
-            }
-          if (i < 0)
-            {
-              number = maximum;
-              goto done;
-            }
-          else
-            continue;
-        }
-      
-      if (isdigit(data[i]))
-        {
-          power = data[i]-'0';
-          for (j = 0; j < num_digit-1; j++)
-            power *= 10;
-          number += power;
-          num_digit++;
-        }
-      else if (data[i] == decimal_point)
-        {
-          fraction = number;
-          frac_digit = num_digit;
-          number = 0;
-          num_digit = 1;
-        }
-      /* A negative sign should be at the beginning of the line. If it is
-         not, it is considered an unsupported character, and the summation
-         starts over from that point. */
-      else if (data[i] == '-')
-        {
-          positive = false;
-          i--;
-          while (i >= 0 && blanks[to_uchar (data[i])])
-            i--;
-          if (i < 0)
-            break;
-          else
-            {
-              positive = true;
-              number = fraction = 0;
-              num_digit = frac_digit = 1;
-            }
-          continue;
-        }
-      /* A positive sign should be at the beginning of the line. If it is
-         not, it is considered an unsupported character, and the summation
-         starts over from that point. */
-      else if (data[i] == '+')
-        {
-          positive = true;
-          i--;
-          while (i >= 0 && blanks[to_uchar (data[i])])
-            i--;
-          if (i < 0)
-            break;
-          else
-            {
-              number = fraction = 0;
-              num_digit = frac_digit = 1;
-            }
-          continue;
-        }
-      /* Thousands separators and blanks are allowed. If an unsupported
-         character appears, start summation over from that point.*/
-      else if (data[i] != thousands_sep && !blanks[to_uchar (data[i])])
-        {
-          fraction = number = 0;
-          num_digit = frac_digit = 1;
-        }
-      i--;
-    }
-    
-  if (number & overflow)
-  {
-    number = maximum;
-    goto done;
-  }
-  
-  number *= 100;
 
-  if (frac_digit > 1)
-    {
-      if (frac_digit == 2)
-        {
-          number += fraction*10;
-        }
-      else
-        {
-          power = 1;
-          for (j = 0; j < frac_digit-2; j++)
-            power *= 10;
-          j = fraction/power;
-          fraction -= j*power;
-          power /= 10;
-          number += j*10 + fraction/power;
-        }
-    }
-    
-  if (number & overflow)
-    number = maximum;
+  /* convert line to float */
+  char *endptr;
+  double dbl_val;
+  uintmax_t discrim;
 
-  done:    
-  
-  *discrim = 0;
-  
-  if (!positive && number != 0)
-    {
-      number = ~number;
-    }
-  else
-    {
-      *discrim |= overflow;
-    }
+  /* convert line to float */
+  dbl_val = strtof(data,&endptr);
 
-  *discrim |= (number & maximum);
-  return *discrim;
+  /* return 0 if strod does not perform a conversion */
+  if (data == endptr)
+    return 0;
+
+  /* cast to uintmax_t */
+  dbl_val = 100*dbl_val;
+  uintmax_t discrim = (uintmax_t)(flt_val);
+
+  /* flip last bit to put negative numbers at bottom of uint */
+  discrim += 0x8000000000000000;
+
+  return discrim;
+  
 }
 
 /* Table that maps characters to order-of-magnitude values.  */
@@ -2034,7 +1852,10 @@ general_numeric_discriminator (char* dest, const char* data)
   else
     *discrim += 0x8000000000000000;
 
-  return *discrim;
+  uintmax_t result = *discrim;
+  free(discrim);
+
+  return result;
 }
 
 
