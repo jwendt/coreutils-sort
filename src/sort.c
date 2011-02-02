@@ -1858,6 +1858,7 @@ general_numeric_discriminator (char* dest, const char* data)
   return result;
 }
 
+
 /* Return a discriminator for LINE, based on KEY.  If KEY is null,
    it represents the entire line.  */
 
@@ -1953,7 +1954,7 @@ line_discriminator (struct line const *line, struct keyfield const *key)
             }
           else if (key->version)
             {
-              // discrim = version_discriminator(xfrmbuf);
+              //discrim = version_discriminator(xfrmbuf);
               discrim = 0;
             }
           else if (key->random)
