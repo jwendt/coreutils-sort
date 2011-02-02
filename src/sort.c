@@ -1774,7 +1774,7 @@ numeric_discriminator (const char* data, const size_t length)
   char const *dataptr = data, *endptr;
   char *allocated = NULL, *xendptr;
   double dbl_val;
-  uintmax_t discrim;
+  uintmax_t discrim, oflow;
   unsigned char ch;
   
   /* Taken from find_unit_order but optimized for numeric_discriminator */
@@ -1808,13 +1808,23 @@ numeric_discriminator (const char* data, const size_t length)
   /* return 0 if strod does not perform a conversion */
   if (dataptr == xendptr)
     return 0x8000000000000000;
-
+  
   /* cast to uintmax_t */
   dbl_val = 100*dbl_val;
   discrim = (uintmax_t)(dbl_val);
+
+  if (dbl_val < 0)
+    oflow = ~discrim;
+  else
+    oflow = discrim;
   
-  if (discrim & 0x8000000000000000)
-    discrim = 0x7FFFFFFFFFFFFFFF;
+  if (oflow & 0x8000000000000000)
+  {
+    if (dbl_val < 0)
+      return 0; 
+    else
+      return 0x7FFFFFFFFFFFFFFF;
+  }
 
   /* flip last bit to put negative numbers at bottom of uint */
   discrim += 0x8000000000000000;
@@ -1838,7 +1848,7 @@ human_numeric_discriminator (char* data, const size_t length)
      multiplied by 10. */
 
   int magnitude;
-  uintmax_t discrim, set_mag;
+  uintmax_t discrim, set_mag, oflow;
   char *endptr, *xendptr, mag;
   double dbl_val;
 
@@ -1856,12 +1866,30 @@ human_numeric_discriminator (char* data, const size_t length)
   
   *endptr = mag;
   
+  if (data == xendptr)
+    return 0x8000000000000000;
+  
   dbl_val = 10*dbl_val;
   discrim = (uintmax_t)(dbl_val);
-  
-  if (discrim & 0x7800000000000000)
-    discrim = 0x07FFFFFFFFFFFFFF;
-  
+
+  if (dbl_val < 0)
+    oflow = ~discrim;
+  else
+    oflow = discrim;
+
+  if (oflow & 0x7800000000000000)
+  {
+    if (dbl_val < 0)
+    {
+      discrim = ~magnitude;
+      discrim <<= 59;
+      discrim += 0x8000000000000000;
+      return discrim;
+    }
+    else
+      discrim = 0x07FFFFFFFFFFFFFF;
+  }
+
   if (dbl_val < 0)
       magnitude = ~magnitude;
 
@@ -3038,7 +3066,7 @@ write_line (struct line const *line, FILE *fp, char const *output_file)
   char *buf = line->text;
   size_t n_bytes = line->length;
   char *ebuf = buf + n_bytes;
-
+  
   if (!output_file && debug)
     {
       /* Convert TAB to '>' and EOL to \n, and then output debugging info.  */
