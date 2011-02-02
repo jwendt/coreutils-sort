@@ -1,4 +1,10 @@
 2011-2-1 Drew Kutilek <dkutilek@ucla.edu>
+	* test-case-generators/numeric_generator.c: Added test case generator
+	for numeric_discriminator.
+	* test-case-generators/human_numeric_generator.c: Added test case
+	generator for human_numeric_discriminator.
+
+2011-2-1 Drew Kutilek <dkutilek@ucla.edu>
 	* src/sort.c (numeric_discriminator): Slight performance increase.
 	* src/sort.c (human_numeric_discriminator): Slight performance
 	increase.
