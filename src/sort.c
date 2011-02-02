@@ -1711,7 +1711,7 @@ numeric_discriminator (char* dest, const char* data, const size_t length)
   uintmax_t discrim;
 
   /* convert line to float */
-  dbl_val = strtof(data,&endptr);
+  dbl_val = strtod(data,&endptr);
 
   /* return 0 if strod does not perform a conversion */
   if (data == endptr)
@@ -1719,7 +1719,7 @@ numeric_discriminator (char* dest, const char* data, const size_t length)
 
   /* cast to uintmax_t */
   dbl_val = 100*dbl_val;
-  uintmax_t discrim = (uintmax_t)(flt_val);
+  discrim = (uintmax_t)(dbl_val);
 
   /* flip last bit to put negative numbers at bottom of uint */
   discrim += 0x8000000000000000;
