@@ -1,3 +1,18 @@
+2011-2-2 Drew Kutilek <dkutilek@ucla.edu>
+	* src/sort.c (find_unit_order_discriminator): New function.
+	Optimized version of find_unit_order for human_numeric_discrim.
+	Changed number of inputs.
+	* src/sort.c (human_numeric_discriminator): Fixed bug with
+	conversion to floating point using magnitudes.  Changed number of
+	inputs.
+	* src/sort.c (numeric_discriminator): Fixed bug with conversion to
+	floating point.  No longer accepts scientific notation.
+	* src/sort.c (find_unit_order): removed declaration above
+	human_numeric_discriminator
+	* src/sort.c (line_discriminator): Updated calls to
+	human_numeric_discriminator and numeric_discriminator to match the
+	change in number of arguments.
+
 2011-2-2 James Wendt <jwendt@cs.ucla.edu>
 	* src/sort.c (numeric_discriminator): Replaced entire function with much
 	simpler implementation. Major performance (runtime) increase.
