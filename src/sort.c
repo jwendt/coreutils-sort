@@ -1713,11 +1713,9 @@ numeric_discriminator (char* dest, const char* data, const size_t length)
   bool positive = true;
   size_t num_digit = 1, frac_digit = 1, j = 0;
   int i = length-1;
-  uintmax_t fraction = 0, number = 0, power = 0, maximum = UINTMAX_MAX, overflow; /* 63 bits */
+  uintmax_t fraction = 0, number = 0, power = 0, maximum = 0x7FFFFFFFFFFFFFFF,
+  overflow = 0x8000000000000000;
   uintmax_t* discrim = (uintmax_t*)dest;
-  
-  maximum >>=1;
-  overflow = maximum ^ UINTMAX_MAX;
   
   while (i >= 0)
     {
@@ -1806,10 +1804,10 @@ numeric_discriminator (char* dest, const char* data, const size_t length)
       
       if (isdigit(data[i]))
         {
-          power = 1;
+          power = data[i]-'0';
           for (j = 0; j < num_digit-1; j++)
             power *= 10;
-          number += (data[i]-'0')*power;
+          number += power;
           num_digit++;
         }
       else if (data[i] == decimal_point)
@@ -1971,15 +1969,15 @@ human_numeric_discriminator (char* dest, const char* data, const size_t length)
   
   numeric_discriminator(dest, data, len);
   uintmax_t* discrim = (uintmax_t*)dest;
-  
-  maximum >>= 1;
-  set_sign = (UINTMAX_MAX) ^ maximum;
-  maximum >>= 4;
-  overflow = (UINTMAX_MAX>>1) ^ maximum;
-  
+
+
   /* maximum  == 0x07FF FFFF FFFF FFFF 
      set_sign == 0x8000 0000 0000 0000
      overflow == 0x7800 0000 0000 0000 */
+
+  maximum = 0x07FFFFFFFFFFFFFF;
+  set_sign = 0x8000000000000000;
+  overflow = 0x7800000000000000;
   
   clear = ~set_sign;
 
