@@ -1777,6 +1777,7 @@ numeric_discriminator (const char* data, const size_t length)
   uintmax_t discrim;
   unsigned char ch;
   
+  /* Taken from find_unit_order but optimized for numeric_discriminator */
   while (blanks[to_uchar(*dataptr)])
     dataptr++;
   endptr = dataptr;
@@ -1806,11 +1807,11 @@ numeric_discriminator (const char* data, const size_t length)
 
   /* return 0 if strod does not perform a conversion */
   if (dataptr == xendptr)
-    return 0;
+    return 0x8000000000000000;
 
   /* cast to uintmax_t */
   dbl_val = 100*dbl_val;
-  discrim = (uintmax_t)(dbl_val);
+  discrim = (uintmax_t)(dbl_val);\
 
   /* flip last bit to put negative numbers at bottom of uint */
   discrim += 0x8000000000000000;
