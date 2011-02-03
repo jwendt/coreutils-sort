@@ -16,7 +16,7 @@ int main (int argc, char** argv) {
 	for (i = 0; i < num_rand; i++) {
 		random = rand();
 		random = random*random*random;
-		whole = random % INTMAX_MAX;
+		whole = random % (INTMAX_MAX>>5);
 		random = rand();
 		random = random*random*random;
 		fraction = abs(random) % 100;

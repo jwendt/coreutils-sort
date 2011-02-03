@@ -1801,23 +1801,29 @@ numeric_discriminator (const char* data, const size_t length)
       allocated[len] = 0;
       dataptr = allocated;
     }
-  
+
   /* convert line to float */
   dbl_val = strtod(dataptr,&xendptr);
 
   /* return 0 if strod does not perform a conversion */
-  if (dataptr == xendptr)
+  if (dataptr == xendptr && dbl_val == 0)
     return 0x8000000000000000;
   
   /* cast to uintmax_t */
   dbl_val = 100*dbl_val;
+  
+  if (dbl_val > 0xFFFFFFFFFFFFFFFF)
+      return 0xFFFFFFFFFFFFFFFF;
+  else if (dbl_val < -0xFFFFFFFFFFFFFFFF)
+      return 0;
+  
   discrim = (uintmax_t)(dbl_val);
-
+  
   if (dbl_val < 0)
     oflow = ~discrim;
   else
     oflow = discrim;
-  
+
   if (oflow & 0x8000000000000000)
   {
     if (dbl_val < 0)
@@ -1832,7 +1838,6 @@ numeric_discriminator (const char* data, const size_t length)
   free(allocated);
   
   return discrim;
-  
 }
 
 /* Return a char* to an 8 byte discriminator of the type human_numeric */
@@ -1866,10 +1871,26 @@ human_numeric_discriminator (char* data, const size_t length)
   
   *endptr = mag;
   
-  if (data == xendptr)
+  if (data == xendptr && dbl_val == 0)
     return 0x8000000000000000;
   
   dbl_val = 10*dbl_val;
+  
+  if (dbl_val > 0x07FFFFFFFFFFFFFF)
+    {
+      discrim = magnitude;
+      discrim <<= 59;
+      discrim |= 0x87FFFFFFFFFFFFFF;
+      return discrim;
+    }
+  else if (dbl_val < -0x07FFFFFFFFFFFFFF)
+    {
+      discrim = ~magnitude;
+      discrim <<= 59;
+      discrim += 0X8000000000000000;
+      return discrim;
+    }
+
   discrim = (uintmax_t)(dbl_val);
 
   if (dbl_val < 0)
@@ -3066,7 +3087,7 @@ write_line (struct line const *line, FILE *fp, char const *output_file)
   char *buf = line->text;
   size_t n_bytes = line->length;
   char *ebuf = buf + n_bytes;
-  
+
   if (!output_file && debug)
     {
       /* Convert TAB to '>' and EOL to \n, and then output debugging info.  */
