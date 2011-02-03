@@ -1823,7 +1823,7 @@ numeric_discriminator (const char* data, const size_t length)
     if (dbl_val < 0)
       return 0; 
     else
-      return 0x7FFFFFFFFFFFFFFF;
+      return 0xFFFFFFFFFFFFFFFF;
   }
 
   /* flip last bit to put negative numbers at bottom of uint */
