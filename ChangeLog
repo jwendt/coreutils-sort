@@ -1,3 +1,18 @@
+2011-2-6 Drew Kutilek <dkutilek@ucla.edu>
+	* src/sort.c (numeric_discriminator): changed implementation to simply
+	count the number of digits instead of representing the whole number.
+	* src/sort.c (human_numeric_discriminator): changed implementation to
+	simple count the number of digits instead of representing the whole
+	number.
+	* test-case-generators/numeric_generator.c (main): added random length
+	of numbers generated to vary test cases more.
+	* src/sort.c (find_unit_order): removed declaration above
+	human_numeric_discriminator.
+	* src/sort.c (unit_order): moved array definition to above
+	human_numeric_discriminator so it can be referenced in the function.
+	* src/sort.c (line_discriminator): changed calls to numeric and human
+	numeric discriminator to match new number of arguments.
+
 2011-2-2 Drew Kutilek <dkutilek@ucla.edu>
 	* src/sort.c (numeric_discriminator): handles overflow correctly now
 	* src/sort.c (human_numeric_discriminator): handles overflow

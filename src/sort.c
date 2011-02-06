@@ -1699,6 +1699,74 @@ key_numeric (struct keyfield const *key)
   return key->numeric || key->general_numeric || key->human_numeric;
 }
 
+/* Return an 8 byte discriminator of the type numeric */
+
+static uintmax_t
+numeric_discriminator (uintmax_t* discrim, const char* data)
+{
+  /* The 8 bytes of the discriminator are used as follows:
+     | 1 sign bit | 63 bits for number of digits |
+     Because positive numbers should be considered larger than negative,
+     the sign bit will be set to 1 for positie numbers, and 0 for negative
+     numbers.
+  */
+
+  bool positive = true;
+  *discrim = 0;
+
+  while (blanks[to_uchar (*data)])
+    data++;
+
+  if (*data == '-')
+    {
+      data++;
+      positive = false;
+    }
+  else if (*data == '+')
+    data++;
+
+  if (*data == decimal_point)
+    goto done;
+
+  /* Leading zero's are okay */
+  do
+    {
+      if (*data != '0' && *data != thousands_sep)
+        break;
+      while (*data++ == '0') {}
+    }
+  while (*data == thousands_sep);
+
+  /* Count number of digits */
+  do
+    {
+      while (ISDIGIT (*data++))
+        {
+          (*discrim)++;
+          /* Overflow */
+          if (*discrim & 0x8000000000000000)
+            {
+              *discrim = UINTMAX_MAX;
+              goto done;
+            }
+        }
+    }
+  while (*data == thousands_sep);
+
+  done:
+
+  if (!positive && *discrim != 0)
+    {
+      *discrim = ~(*discrim);
+      *discrim &= 0x7FFFFFFFFFFFFFFF;
+    }
+  else
+    *discrim |= 0x8000000000000000;
+
+  return *discrim;
+}
+
+
 /* Table that maps characters to order-of-magnitude values.  */
 static char const unit_order[UCHAR_LIM] =
   {
@@ -1728,200 +1796,127 @@ static char const unit_order[UCHAR_LIM] =
 #endif
   };
 
-/* A specific version of find_unit_order that also returns the last character
-   to be scanned.  Necessary for implementing a discriminator efficiently. */
-
-static int find_unit_order_discriminator (char *number, char** endptr)
-{
-  bool minus_sign = (*number == '-');
-  *endptr = number + minus_sign;
-  int nonzero = 0;
-  unsigned char ch;
-
-  /* Scan to end of number.
-     Decimals or separators not followed by digits stop the scan.
-     Numbers ending in decimals or separators are thus considered
-     to be lacking in units.
-     FIXME: add support for multibyte thousands_sep and decimal_point.  */
-
-  do
-    {
-      while (ISDIGIT (ch = *(*endptr)++))
-        nonzero |= ch - '0';
-    }
-  while (ch == thousands_sep);
-
-  if (ch == decimal_point)
-    while (ISDIGIT (ch = *(*endptr)++))
-      nonzero |= ch - '0';
-
-  if (nonzero)
-    {
-      int order = unit_order[ch];
-      return (minus_sign ? -order : order);
-    }
-  else
-    return 0;
-}
-
-/* Return a char* to an 8 byte discriminator of the type numeric */
+/* Return an 8 byte discriminator of the type human_numeric */
 
 static uintmax_t
-numeric_discriminator (const char* data, const size_t length)
-{
-
-  /* convert line to float */
-  char const *dataptr = data, *endptr;
-  char *allocated = NULL, *xendptr;
-  double dbl_val;
-  uintmax_t discrim, oflow;
-  unsigned char ch;
-
-  /* Taken from find_unit_order but optimized for numeric_discriminator */
-  while (blanks[to_uchar(*dataptr)])
-    dataptr++;
-  endptr = dataptr;
-  if (*endptr == '-')
-      endptr++;
-  do
-    {
-      while (ISDIGIT (ch = *endptr++)){}
-    }
-  while (ch == thousands_sep);
-
-  if (ch == decimal_point)
-    while (ISDIGIT (ch = *endptr++)){}
-
-  size_t len = endptr-dataptr;
-
-  if (len != length)
-    {
-      allocated = (char*) xmalloc(len+1);
-      memcpy(allocated,data,len);
-      allocated[len] = 0;
-      dataptr = allocated;
-    }
-
-  /* convert line to float */
-  dbl_val = strtod(dataptr,&xendptr);
-
-  /* return 0 if strod does not perform a conversion */
-  if (dataptr == xendptr && dbl_val == 0)
-    return 0x8000000000000000;
-
-  /* cast to uintmax_t */
-  dbl_val = 100*dbl_val;
-
-  if (dbl_val > 0xFFFFFFFFFFFFFFFF)
-      return 0xFFFFFFFFFFFFFFFF;
-  else if (dbl_val < -0xFFFFFFFFFFFFFFFF)
-      return 0;
-
-  discrim = (uintmax_t)(dbl_val);
-
-  if (dbl_val < 0)
-    oflow = ~discrim;
-  else
-    oflow = discrim;
-
-  if (oflow & 0x8000000000000000)
-  {
-    if (dbl_val < 0)
-      return 0;
-    else
-      return 0xFFFFFFFFFFFFFFFF;
-  }
-
-  /* flip last bit to put negative numbers at bottom of uint */
-  discrim += 0x8000000000000000;
-
-  free(allocated);
-
-  return discrim;
-}
-
-/* Return a char* to an 8 byte discriminator of the type human_numeric */
-
-static uintmax_t
-human_numeric_discriminator (char* data, const size_t length)
+human_numeric_discriminator (uintmax_t* discrim, const char* data)
 {
   /* The 8 bytes of the discriminator are used as follows:
-     | 1 sign bit | 4 magnitude bits | 59 bits for integer representation |
-     Because positive numbers should be considered larger than negative,
+     | 1 sign bit | 4 magnitude bits | 59 bits for number of digits |
+     Because positive numbers should be considered larger than negative, 
      the sign bit will be set to 1 for positive numbers, and 0 for negative
-     numbers. To handle a single decimal place, the final number will be
-     multiplied by 10. */
+     numbers. */
 
-  int magnitude;
-  uintmax_t discrim, set_mag, oflow;
-  char *endptr, *xendptr, mag;
-  double dbl_val;
+  int magnitude, nonzero = 0;
+  bool positive = true, separator = false;
+  uintmax_t set_magnitude;
+  char ch;
+
+  *discrim = 0;
 
   while (blanks[to_uchar (*data)])
     data++;
 
-  magnitude = find_unit_order_discriminator(data, &endptr);
-  if (magnitude < 0)
-    magnitude = -magnitude;
-
-  mag = *endptr;
-  *endptr = '\0';
-
-  dbl_val = strtod(data,&xendptr);
-
-  *endptr = mag;
-
-  if (data == xendptr && dbl_val == 0)
-    return 0x8000000000000000;
-
-  dbl_val = 10*dbl_val;
-
-  if (dbl_val > 0x07FFFFFFFFFFFFFF)
+  if (*data == '-')
     {
-      discrim = magnitude;
-      discrim <<= 59;
-      discrim |= 0x87FFFFFFFFFFFFFF;
-      return discrim;
+      data++;
+      positive = false;
     }
-  else if (dbl_val < -0x07FFFFFFFFFFFFFF)
+  else if (*data == '+')
+    data++;
+
+  /* Leading zero's are okay */
+  while (*data == '0' || *data == thousands_sep)
     {
-      discrim = ~magnitude;
-      discrim <<= 59;
-      discrim += 0X8000000000000000;
-      return discrim;
+      if (*data == thousands_sep)
+        {
+          if (separator)
+            goto done;
+          else
+            separator = true;
+        }
+      else
+        separator = false;
+      data++;
     }
 
-  discrim = (uintmax_t)(dbl_val);
+  separator = false;
 
-  if (dbl_val < 0)
-    oflow = ~discrim;
+  /* Count number of digits */
+  while (ISDIGIT (*data) || *data == thousands_sep)
+    {
+      if (*data == thousands_sep)
+      {
+          if (separator)
+            goto done;
+          else
+            separator = true;
+      }
+      else
+        {
+          (*discrim)++;
+          /* Overflow */
+          if (*discrim & 0x7800000000000000)
+            {
+              *discrim = 0x07FFFFFFFFFFFFFF;
+              goto magnitude;
+            }
+        }
+      data++;
+    }
+
+  magnitude:
+
+  if (*discrim == 0x07FFFFFFFFFFFFFF)
+    {
+      if (*data != decimal_point)
+        {
+          separator = false;
+          while (ISDIGIT (*data) || *data == thousands_sep)
+            {
+              if (*data == thousands_sep)
+                {
+                  if (separator)
+                    goto done;
+                  else
+                    separator = true;
+                }
+              data++;
+            }
+        }
+      if (*data == decimal_point)
+        while (ISDIGIT (ch = *data++)) {}
+      
+      magnitude = unit_order[ch];
+    }
   else
-    oflow = discrim;
-
-  if (oflow & 0x7800000000000000)
-  {
-    if (dbl_val < 0)
     {
-      discrim = ~magnitude;
-      discrim <<= 59;
-      discrim += 0x8000000000000000;
-      return discrim;
+      ch = *data;
+      if (*data == decimal_point)
+        while (ISDIGIT (ch = *data++))
+          nonzero |= ch - '0';
+
+      if (nonzero || *discrim > 0)
+        magnitude = unit_order[ch];
+      else
+        magnitude = 0;
     }
-    else
-      discrim = 0x07FFFFFFFFFFFFFF;
-  }
 
-  if (dbl_val < 0)
-      magnitude = ~magnitude;
+  set_magnitude = abs(magnitude);
+  set_magnitude <<= 59;
+  *discrim |= set_magnitude;
+  
+  done:
+  
+  if (!positive && *discrim != 0)
+    {
+      *discrim = ~(*discrim);
+      *discrim &= 0x7FFFFFFFFFFFFFFF;
+    }
+  else
+    *discrim |= 0x8000000000000000;
 
-  discrim &= 0x8EFFFFFFFFFFFFFF;
-  set_mag = magnitude;
-  set_mag <<= 59;
-  discrim |= set_mag;
-
-  discrim += 0x8000000000000000;
-
-  return discrim;
+  return *discrim;
 }
 
 /* Return a char* to an 8 byte discriminator of the type general_numeric */
@@ -2050,11 +2045,11 @@ line_discriminator (struct line const *line, struct keyfield const *key)
         {
           if (key->numeric)
             {
-              discrim = numeric_discriminator(t,tlen);
+              numeric_discriminator(&discrim,t);
             }
           else if (key->human_numeric)
             {
-              discrim = human_numeric_discriminator(t,tlen);
+              human_numeric_discriminator(&discrim,t);
             }
           else if (key->general_numeric)
             {
@@ -2128,10 +2123,6 @@ line_discriminator (struct line const *line, struct keyfield const *key)
 
   return ((key ? key->reverse : reverse) ? ~discrim : discrim);
 }
-
-
-
-
 
 
 /* Fill BUF reading from FP, moving buf->left bytes from the end
