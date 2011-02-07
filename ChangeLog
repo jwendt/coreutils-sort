@@ -13,6 +13,11 @@
 	* src/sort.c (line_discriminator): changed calls to numeric and human
 	numeric discriminator to match new number of arguments.
 
+2011-2-2 Kevin Deng <dengchao@gmail.com>
+	* src/sort.c (version_discriminator): Removed the discriminator
+        generator. Not going to submit it to GNU due to unclear functionality
+        of -V mode, as well as lack of performance gain.
+
 2011-2-2 Drew Kutilek <dkutilek@ucla.edu>
 	* src/sort.c (numeric_discriminator): handles overflow correctly now
 	* src/sort.c (human_numeric_discriminator): handles overflow
@@ -55,6 +60,12 @@
 	* src/sort.c (human_numeric_discriminator): Slight performance
 	increase.
 
+2011-1-31 Kevin Deng <dengchao@gmail.com>
+	* src/sort.c (version_discriminator): Removed previous implementation.
+	Current GNU implementation doesn't do what documentation says it's 
+        supposed to do. Added new implementation of discrim that follows what 
+        GNU currently actually does.
+
 2011-1-31 James Wendt <jwendt@cs.ucla.edu>
 	* src/sort.c (general_numeric_discriminator): Handles non general numeric
 	values correctly.
@@ -73,6 +84,10 @@
 	to discrim instead of using pointers.
 	* src/sort.c (line_discriminator): Changed byte shuffling to no longer
 	apply to general_numeric keys.
+
+2011-1-30 Kevin Deng <dengchao@gmail.com>
+	* src/sort.c (version_discriminator): Added discriminant generator.
+	Does not work like the other discriminants.
 
 2011-1-30 Drew Kutilek <dkutilek@ucla.edu>
 	* src/sort.c (numeric_discriminator): Fixed error with $INTMAX_MAX and 
