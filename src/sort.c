@@ -1831,7 +1831,6 @@ human_numeric_discriminator (uintmax_t* discrim, const char* data)
           *discrim = 0x07FFFFFFFFFFFFFF;
           goto done;
         }
-      data++;
     }
 
   done:
@@ -1844,7 +1843,6 @@ human_numeric_discriminator (uintmax_t* discrim, const char* data)
       if (*data == decimal_point)
         while (ISDIGIT (*data))
           data++;
-
       magnitude = unit_order[*data];
     }
   else
