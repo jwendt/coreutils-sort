@@ -1,4 +1,9 @@
 2011-2-6 Drew Kutilek <dkutilek@ucla.edu>
+	* test-case-generators/numeric_generator_no_fraction.c: added new test
+	case generator to test the new implementation of the numeric
+	discriminator.
+
+2011-2-6 Drew Kutilek <dkutilek@ucla.edu>
 	* src/sort.c (numeric_discriminator): changed implementation to simply
 	count the number of digits instead of representing the whole number.
 	* src/sort.c (human_numeric_discriminator): changed implementation to
