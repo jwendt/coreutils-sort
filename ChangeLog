@@ -1,3 +1,9 @@
+2011-2-8 Drew Kutilek <dkutilek@ucla.edu>
+	* src/sort.c (numeric_discriminator): changed algorithm and discrim
+	representation.  has shown initial speed up.
+	* src/sort.c (human_numeric_discriminator): changed algorithm and
+	discrim representation.  has shown initial speed up.
+
 2011-2-6 Drew Kutilek <dkutilek@ucla.edu>
 	* src/sort.c (numeric_discriminator): fixed algorithm to handle
 	thousands separators the same way as the existing code.
