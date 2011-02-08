@@ -1729,29 +1729,21 @@ numeric_discriminator (uintmax_t* discrim, const char* data)
     goto done;
 
   /* Leading zero's are okay */
-  do
-    {
-      if (*data != '0' && *data != thousands_sep)
-        break;
-      while (*data++ == '0') {}
-    }
-  while (*data == thousands_sep);
+  while (*data == '0' || *data == thousands_sep)
+    data++;
 
   /* Count number of digits */
-  do
+  while (ISDIGIT (*data) || *data == thousands_sep)
     {
-      while (ISDIGIT (*data++))
+      (*discrim)++;
+      /* Overflow */
+      if (*discrim & 0x8000000000000000)
         {
-          (*discrim)++;
-          /* Overflow */
-          if (*discrim & 0x8000000000000000)
-            {
-              *discrim = UINTMAX_MAX;
-              goto done;
-            }
+          *discrim = UINTMAX_MAX;
+          goto done;
         }
+      data++;
     }
-  while (*data == thousands_sep);
 
   done:
 
@@ -1808,7 +1800,7 @@ human_numeric_discriminator (uintmax_t* discrim, const char* data)
      numbers. */
 
   int magnitude, nonzero = 0;
-  bool positive = true, separator = false;
+  bool positive = true;
   uintmax_t set_magnitude;
   char ch;
 
@@ -1827,67 +1819,33 @@ human_numeric_discriminator (uintmax_t* discrim, const char* data)
 
   /* Leading zero's are okay */
   while (*data == '0' || *data == thousands_sep)
-    {
-      if (*data == thousands_sep)
-        {
-          if (separator)
-            goto done;
-          else
-            separator = true;
-        }
-      else
-        separator = false;
-      data++;
-    }
-
-  separator = false;
+    data++;
 
   /* Count number of digits */
-  while (ISDIGIT (*data) || *data == thousands_sep)
+  while (ISDIGIT (*data++) || *data == thousands_sep)
     {
-      if (*data == thousands_sep)
-      {
-          if (separator)
-            goto done;
-          else
-            separator = true;
-      }
-      else
+      (*discrim)++;
+      /* Overflow */
+      if (*discrim & 0x7800000000000000)
         {
-          (*discrim)++;
-          /* Overflow */
-          if (*discrim & 0x7800000000000000)
-            {
-              *discrim = 0x07FFFFFFFFFFFFFF;
-              goto magnitude;
-            }
+          *discrim = 0x07FFFFFFFFFFFFFF;
+          goto done;
         }
       data++;
     }
 
-  magnitude:
+  done:
 
   if (*discrim == 0x07FFFFFFFFFFFFFF)
     {
       if (*data != decimal_point)
-        {
-          separator = false;
-          while (ISDIGIT (*data) || *data == thousands_sep)
-            {
-              if (*data == thousands_sep)
-                {
-                  if (separator)
-                    goto done;
-                  else
-                    separator = true;
-                }
-              data++;
-            }
-        }
+        while (ISDIGIT (*data) || *data == thousands_sep)
+          data++;
       if (*data == decimal_point)
-        while (ISDIGIT (ch = *data++)) {}
-      
-      magnitude = unit_order[ch];
+        while (ISDIGIT (*data))
+          data++;
+
+      magnitude = unit_order[*data];
     }
   else
     {
@@ -1905,9 +1863,7 @@ human_numeric_discriminator (uintmax_t* discrim, const char* data)
   set_magnitude = abs(magnitude);
   set_magnitude <<= 59;
   *discrim |= set_magnitude;
-  
-  done:
-  
+
   if (!positive && *discrim != 0)
     {
       *discrim = ~(*discrim);

@@ -1,4 +1,10 @@
 2011-2-6 Drew Kutilek <dkutilek@ucla.edu>
+	* src/sort.c (numeric_discriminator): fixed algorithm to handle
+	thousands separators the same way as the existing code.
+	* src/sort.c (human_numeric_discriminator): fixed algorithm to handle
+	thousands separators the same way as the existing code.
+
+2011-2-6 Drew Kutilek <dkutilek@ucla.edu>
 	* test-case-generators/numeric_generator_no_fraction.c: added new test
 	case generator to test the new implementation of the numeric
 	discriminator.
