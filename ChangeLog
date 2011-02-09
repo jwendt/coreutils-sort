@@ -1,4 +1,10 @@
 2011-2-6 Drew Kutilek <dkutilek@ucla.edu>
+	* test-case-generators/human_numeric_generator.c (main): added random
+	length of numbers generated to vary test cases more.
+	* test-case-generators/: added new testing scripts and makefile. view
+	test-case-generators/README for details.
+
+2011-2-6 Drew Kutilek <dkutilek@ucla.edu>
 	* src/sort.c (numeric_discriminator): changed implementation to simply
 	count the number of digits instead of representing the whole number.
 	* src/sort.c (human_numeric_discriminator): changed implementation to

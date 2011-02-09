@@ -6,6 +6,7 @@
 int main (int argc, char** argv) {
 	intmax_t i, random, whole, fraction, num_rand;
 	int magnitude;
+	char buf[1024];
 	char mag[10] = { ' ', 'k', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y' };
 	if (argc != 2) {
 		printf("Please input the number of lines to be generated.\n");
@@ -21,21 +22,28 @@ int main (int argc, char** argv) {
 		random = random*random*random;
 		fraction = abs(random) % 100;
 		magnitude = rand() % 10;
-		random = rand() % 5;
+		random = rand() % 6;
 		if (random == 0) {
-			printf("%ju.%.1ju%c\n",whole,fraction,mag[magnitude]);
+			sprintf(buf,"%ju",whole);
+			printf("%.*s.%.1ju%c\n",rand()%20+1,buf,fraction,mag[magnitude]);
 		}
 		else if (random == 1) {
-			printf("%ju.0%c\n",whole,mag[magnitude]);
+			sprintf(buf,"&ju",whole);
+			printf("-%.*s.%.1ju%c\n",rand()%20+1,buf,fraction,mag[magnitude]);
 		}
-		else if (random ==2 ) {
+		else if (random == 2) {
 			printf("-0.%.1ju%c\n",fraction,mag[magnitude]);
 		}
-		else if (random == 3){
+		else if (random == 3) {
 			printf("0.%.1ju%c\n",fraction,mag[magnitude]);
 		}
+		else if (random == 4) {
+			sprintf(buf,"%ju",whole);
+			printf("-%.*s%c",rand()%20+1,buf,mag[magnitude]);
+		}
 		else {
-			printf("%ju%c\n",whole,mag[magnitude]);
+			sprintf(buf,"%ju",whole);
+			printf("%.*s%c\n",rand()%20+1,buf,mag[magnitude]);
 		}
 	}
 	return 0;
