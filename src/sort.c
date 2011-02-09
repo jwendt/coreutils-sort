@@ -1708,10 +1708,13 @@ numeric_discriminator (uintmax_t* discrim, const char* data)
      | 1 sign bit | 63 bits for number of digits |
      Because positive numbers should be considered larger than negative,
      the sign bit will be set to 1 for positie numbers, and 0 for negative
-     numbers.
+     numbers.  The discriminator will be multiplied by 100 to include two
+     decimal places.
   */
 
-  bool positive = true;
+  bool positive = true, isdigit;
+  uintmax_t MAXIMUM = (UINTMAX_MAX>>1)/100;
+  int i;
   *discrim = 0;
 
   while (blanks[to_uchar (*data)])
@@ -1725,33 +1728,44 @@ numeric_discriminator (uintmax_t* discrim, const char* data)
   else if (*data == '+')
     data++;
 
-  if (*data == decimal_point)
-    goto done;
-
   /* Leading zero's are okay */
-  do
-    {
-      if (*data != '0' && *data != thousands_sep)
-        break;
-      while (*data++ == '0') {}
-    }
-  while (*data == thousands_sep);
+  while (*data == '0' || *data == thousands_sep)
+    data++;
 
-  /* Count number of digits */
-  do
+  /* Convert number to integer */
+  while (isdigit = ISDIGIT (*data) || *data == thousands_sep)
     {
-      while (ISDIGIT (*data++))
+      if (isdigit)
+      {
+        *discrim *= 10;
+        *discrim += (*data - '0');
+        /* Overflow */
+        if (*discrim > MAXIMUM)
+          {
+            *discrim = UINTMAX_MAX;
+            goto done;
+          }
+      }
+      data++;
+    }
+
+  /* Fraction conversion */
+  if (*data == decimal_point)
+    {
+      data++;
+      for (i = 0; i < 2 && ISDIGIT (*data); i++)
         {
-          (*discrim)++;
-          /* Overflow */
-          if (*discrim & 0x8000000000000000)
-            {
-              *discrim = UINTMAX_MAX;
-              goto done;
-            }
+          *discrim *= 10;
+          *discrim += (*data - '0');
+        }
+      while (i < 2)
+        {
+          *discrim *= 10;
+          i++;
         }
     }
-  while (*data == thousands_sep);
+  else
+    *discrim *= 100;
 
   done:
 
@@ -1808,8 +1822,8 @@ human_numeric_discriminator (uintmax_t* discrim, const char* data)
      numbers. */
 
   int magnitude, nonzero = 0;
-  bool positive = true, separator = false;
-  uintmax_t set_magnitude;
+  bool positive = true, isdigit;
+  uintmax_t set_magnitude, MAXIMUM = (UINTMAX_MAX>>5)/10;
   char ch;
 
   *discrim = 0;
@@ -1827,67 +1841,47 @@ human_numeric_discriminator (uintmax_t* discrim, const char* data)
 
   /* Leading zero's are okay */
   while (*data == '0' || *data == thousands_sep)
-    {
-      if (*data == thousands_sep)
-        {
-          if (separator)
-            goto done;
-          else
-            separator = true;
-        }
-      else
-        separator = false;
-      data++;
-    }
+    data++;
 
-  separator = false;
-
-  /* Count number of digits */
-  while (ISDIGIT (*data) || *data == thousands_sep)
+  /* Convert number to integer */
+  while (isdigit = ISDIGIT (*data) || *data == thousands_sep)
     {
-      if (*data == thousands_sep)
-      {
-          if (separator)
-            goto done;
-          else
-            separator = true;
-      }
-      else
+      if (isdigit)
         {
-          (*discrim)++;
+          *discrim *= 10;
+          *discrim += (*data -'0');
           /* Overflow */
-          if (*discrim & 0x7800000000000000)
+          if (*discrim > MAXIMUM)
             {
               *discrim = 0x07FFFFFFFFFFFFFF;
-              goto magnitude;
+              goto done;
             }
         }
       data++;
     }
 
-  magnitude:
+  *discrim *= 10;
+
+  /* Fraction conversion */
+  if (*data == decimal_point)
+    {
+      data++;
+      if (ISDIGIT (*data))
+        *discrim += (*data - '0');
+    }
+  
+  
+  done:
 
   if (*discrim == 0x07FFFFFFFFFFFFFF)
     {
       if (*data != decimal_point)
-        {
-          separator = false;
-          while (ISDIGIT (*data) || *data == thousands_sep)
-            {
-              if (*data == thousands_sep)
-                {
-                  if (separator)
-                    goto done;
-                  else
-                    separator = true;
-                }
-              data++;
-            }
-        }
+        while (ISDIGIT (*data) || *data == thousands_sep)
+          data++;
       if (*data == decimal_point)
-        while (ISDIGIT (ch = *data++)) {}
-      
-      magnitude = unit_order[ch];
+        while (ISDIGIT (*data))
+          data++;
+      magnitude = unit_order[*data];
     }
   else
     {
@@ -1902,12 +1896,10 @@ human_numeric_discriminator (uintmax_t* discrim, const char* data)
         magnitude = 0;
     }
 
-  set_magnitude = abs(magnitude);
+  set_magnitude = magnitude;
   set_magnitude <<= 59;
   *discrim |= set_magnitude;
-  
-  done:
-  
+
   if (!positive && *discrim != 0)
     {
       *discrim = ~(*discrim);
