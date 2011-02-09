@@ -1,1 +1,1 @@
-./generic_numeric_generator $1 | ./../../coreutils/src/sort -g > $2
+./general_numeric_generator $1 | ./../../coreutils/src/sort -g > /dev/null 

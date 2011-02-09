@@ -1,4 +1,4 @@
 echo "New implementation"
-time ./new_numeric.sh $1 /dev/null
+time ./new_numeric.sh $1
 echo "Old implementation"
-time ./old_numeric.sh $1 /dev/null
+time ./old_numeric.sh $1
