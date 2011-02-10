@@ -1,0 +1,27 @@
+All of these scripts rely on the bleeding edge of coreutils to be stored and
+built in the directory "../../coreutils" to be tested against.  You can do
+this with these commands:
+
+$ cd ../..
+$ git clone git://git.sv.gnu.org/coreutils
+$ cd coreutils
+$ ./bootstrap
+$ ./configure
+$ make
+
+If you have any difficulty with dependencies while building, refer to the
+"/coreutils/README-hacking" and "/coreutils/README-prereq" files in the newly
+clones coreutils folder.
+
+To build the generators, simply use the "make" command inside 
+"coreutils-sort/test-case-generators". 
+"general_numeric_generator" will have warnings on build, ignore them.
+
+To run these tests, use the run_*_test.sh scripts.  They expect an argument
+of how many lines to produce to be piped to the sort benchmark.  All output
+is redirected to "/dev/null" because of the storage limitations on the
+seasnet servers.
+
+After completion, the scripts will display the time taken by each version
+using the command time.  This includes the time to run the generator and
+the sort program.  Because we are working with percentages, this is okay.
