@@ -1914,16 +1914,13 @@ human_numeric_discriminator (uintmax_t* discrim, const char* data)
 /* Return a char* to an 8 byte discriminator of the type general_numeric */
 
 static uintmax_t
-general_numeric_discriminator (char* dest, const char* data)
+general_numeric_discriminator (uintmax_t* discrim, const char* data)
 {
   /* Because positive numbers should be considered larger than negative,
      the sign bit will be set to 1 for positive numbers, and negative numbers
      will have all of their bits flipped. */
-  double *doubleP = (double*)dest;
-  bool nanOrInf = false;
-  uintmax_t *discrim;
-  discrim = (uintmax_t*)malloc(sizeof(uintmax_t));
-  memset(discrim,0,sizeof(uintmax_t));
+  *discrim = 0;
+  double* doubleP = (double*) discrim;
 
   /* get the value as a double from the string */
   char * endptr;
@@ -1931,32 +1928,22 @@ general_numeric_discriminator (char* dest, const char* data)
 
   /* return 0 if strod does not perform a conversion */
   if (data == endptr)
-    return 0;
+    {
+      *discrim = 0;
+      return 0;
+    }
 
-  /* copy bytes from doubleP to discrim */
-  memcpy(discrim, doubleP, sizeof(double));
-
-  /* values of +/- inf, NaN have their float bits (bits 2-12) all set */
-  if(*discrim & 0x7FF0000000000000 != 0x7FF0000000000000)
-    nanOrInf = true;
+  if (*discrim == 0x8000000000000000)
+    *discrim &= 0x7FFFFFFFFFFFFFFF;
 
   /* if negative, flip every bit, otherwise, set the sign bit
   if positive flip only the sign bit  */
   if((*discrim >> 63) == 1 )
-  {
     *discrim = ~(*discrim);
-    /* if value was -inf or -NaN, the fraction bits need to be flipped
-    In order to preserve -NaN < -Inf < +Inf < NaN */
-    if(nanOrInf)
-        *discrim ^= 0x000FFFFFFFFFFFFF;
-  }
   else
     *discrim ^= 0x8000000000000000;
 
-  uintmax_t result = *discrim;
-  free(discrim);
-
-  return result;
+  return *discrim;
 }
 
 
@@ -2045,7 +2032,7 @@ line_discriminator (struct line const *line, struct keyfield const *key)
             }
           else if (key->general_numeric)
             {
-              discrim = general_numeric_discriminator(xfrmbuf,t);
+              general_numeric_discriminator(&discrim,t);
             }
           else if (key->month)
             {
