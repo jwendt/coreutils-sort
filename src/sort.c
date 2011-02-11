@@ -2069,14 +2069,10 @@ line_discriminator (struct line const *line, struct keyfield const *key)
     }
   else
     {
+      compare_with_strxfrm:;
       if (hard_LC_COLLATE)
         {
-          ch = *lim;
-          *lim = '\0';
-        compare_with_strxfrm:;
-          size_t xfrmlen = strxfrm (xfrmbuf, ptr, sizeof xfrmbuf);
-          t = xfrmbuf;
-          tlen = MIN (xfrmlen, sizeof discrim);
+          return 0;
         }
       else
         {
