@@ -1709,9 +1709,7 @@ numeric_discriminator (uintmax_t* discrim, const char* data)
      Because positive numbers should be considered larger than negative,
      the sign bit will be set to 1 for positie numbers, and 0 for negative
      numbers.  The discriminator will be multiplied by 100 to include two
-     decimal places.
-  */
-
+     decimal places. */
   bool positive = true, isdigit;
   uintmax_t MAXIMUM = (UINTMAX_MAX>>1)/100;
   int i;
@@ -1779,7 +1777,6 @@ numeric_discriminator (uintmax_t* discrim, const char* data)
 
   return *discrim;
 }
-
 
 /* Table that maps characters to order-of-magnitude values.  */
 static char const unit_order[UCHAR_LIM] =
@@ -1873,6 +1870,7 @@ human_numeric_discriminator (uintmax_t* discrim, const char* data)
   
   done:
 
+  /* Handle overflow special cases */
   if (*discrim == 0x07FFFFFFFFFFFFFF)
     {
       if (*data != decimal_point)
@@ -1883,6 +1881,7 @@ human_numeric_discriminator (uintmax_t* discrim, const char* data)
           data++;
       magnitude = unit_order[*data];
     }
+  /* Set magnitude bits */
   else
     {
       ch = *data;
@@ -1911,7 +1910,7 @@ human_numeric_discriminator (uintmax_t* discrim, const char* data)
   return *discrim;
 }
 
-/* Return a char* to an 8 byte discriminator of the type general_numeric */
+/* Return an 8 byte discriminator of the type general_numeric */
 
 static uintmax_t
 general_numeric_discriminator (uintmax_t* discrim, const char* data)
@@ -1922,11 +1921,11 @@ general_numeric_discriminator (uintmax_t* discrim, const char* data)
   *discrim = 0;
   double* doubleP = (double*) discrim;
 
-  /* get the value as a double from the string */
+  /* Get the value as a double from the string */
   char * endptr;
   *doubleP = strtod(data,&endptr);
 
-  /* return 0 if strod does not perform a conversion */
+  /* Return 0 if strod does not perform a conversion */
   if (data == endptr)
     {
       *discrim = 0;
@@ -1936,8 +1935,8 @@ general_numeric_discriminator (uintmax_t* discrim, const char* data)
   if (*discrim == 0x8000000000000000)
     *discrim &= 0x7FFFFFFFFFFFFFFF;
 
-  /* if negative, flip every bit, otherwise, set the sign bit
-  if positive flip only the sign bit  */
+  /* If negative, flip every bit, otherwise, set the sign bit.
+     If positive flip only the sign bit.  */
   if((*discrim >> 63) == 1 )
     *discrim = ~(*discrim);
   else
@@ -1945,7 +1944,6 @@ general_numeric_discriminator (uintmax_t* discrim, const char* data)
 
   return *discrim;
 }
-
 
 /* Return a discriminator for LINE, based on KEY.  If KEY is null,
    it represents the entire line.  */
@@ -1962,15 +1960,6 @@ line_discriminator (struct line const *line, struct keyfield const *key)
   char *t;
   size_t tlen;
   char stackbuf[4000];
-
-  /* All known implementations of strxfrm, when faced with a buffer
-     that's too small, fill up the buffer anyway (even though POSIX
-     says they needn't), except perhaps for the last XFRM_JUNK bytes.
-     Currently we guess XFRM_JUNK to be 10, which is probably too
-     large, but better too large (and therefore inefficient) than too
-     small (and therefore incorrect).  */
-  enum { XFRM_JUNK = 10 };
-  char xfrmbuf[sizeof discrim + XFRM_JUNK];
 
   if (key)
     {
@@ -2015,7 +2004,7 @@ line_discriminator (struct line const *line, struct keyfield const *key)
         }
       else
         {
-          /* Use the keys in-place, temporarily null-terminated.  */
+          /* Use the keys in-place, temporarily null-terminated. */
           t = ptr; tlen = len; ch = *lim; *lim = '\0';
         }
 
@@ -2036,13 +2025,13 @@ line_discriminator (struct line const *line, struct keyfield const *key)
             }
           else if (key->month)
             {
-              xfrmbuf[0] = getmonth (t, NULL);
-              t = xfrmbuf;
+              stackbuf[0] = getmonth (t, NULL);
+              t = stackbuf;
               tlen = 1;
             }
           else if (key->version)
             {
-              //discrim = version_discriminator(xfrmbuf);
+              /* FIXME not yet implemented */
               discrim = 0;
             }
           else if (key->random)
@@ -2052,12 +2041,6 @@ line_discriminator (struct line const *line, struct keyfield const *key)
               md5_finish_ctx (&s, dig);
               t = (char *) dig;
               tlen = sizeof dig;
-            }
-          else if (key->version)
-            {
-              /* FIXME: Not yet implemented.  */
-              t = stackbuf;
-              tlen = 0;
             }
           else
             {
@@ -2069,9 +2052,10 @@ line_discriminator (struct line const *line, struct keyfield const *key)
     }
   else
     {
-      compare_with_strxfrm:;
       if (hard_LC_COLLATE)
         {
+          compare_with_strxfrm:;
+          /* FIXME not yet implemented */
           return 0;
         }
       else
@@ -2098,7 +2082,6 @@ line_discriminator (struct line const *line, struct keyfield const *key)
 
   return ((key ? key->reverse : reverse) ? ~discrim : discrim);
 }
-
 
 /* Fill BUF reading from FP, moving buf->left bytes from the end
    of buf->buf to the beginning first.  If EOF is reached and the

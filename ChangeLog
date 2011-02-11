@@ -1,4 +1,8 @@
 2011-2-10 Drew Kutilek <dkutilek@ucla.edu>
+	*src/sort.c: Made final pass for GNU coding standards.  Source code
+	is ready for tagging and for submission to GNU.
+
+2011-2-10 Drew Kutilek <dkutilek@ucla.edu>
 	* src/sort.c (line_discriminator): removed call to strxfrm.  if a
 	default compare is needed, discriminator is only used in C or POSIX
 	locale, any other locale the disriminator is set to 0.  Same
