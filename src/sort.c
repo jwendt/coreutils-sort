@@ -1866,8 +1866,7 @@ human_numeric_discriminator (uintmax_t* discrim, const char* data)
       if (ISDIGIT (*data))
         *discrim += (*data - '0');
     }
-  
-  
+
   done:
 
   /* Handle overflow special cases */
