@@ -1773,7 +1773,9 @@ numeric_discriminator (uintmax_t* discrim, const char* data)
       *discrim &= 0x7FFFFFFFFFFFFFFF;
     }
   else
-    *discrim |= 0x8000000000000000;
+    {
+      *discrim |= 0x8000000000000000;
+    }
 
   return *discrim;
 }
@@ -1904,7 +1906,9 @@ human_numeric_discriminator (uintmax_t* discrim, const char* data)
       *discrim &= 0x7FFFFFFFFFFFFFFF;
     }
   else
-    *discrim |= 0x8000000000000000;
+    {
+      *discrim |= 0x8000000000000000;
+    }
 
   return *discrim;
 }
