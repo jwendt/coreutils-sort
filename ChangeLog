@@ -1,3 +1,7 @@
+2011-2-16 Drew Kutilek <dkutilek@ucla.edu>
+	*src/sort.c: deleted unneeded comments in sort.c in preparation
+	to submit a patch.
+
 2011-2-10 Drew Kutilek <dkutilek@ucla.edu>
 	*src/sort.c: Made final pass for GNU coding standards.  Source code
 	is ready for tagging and for submission to GNU.

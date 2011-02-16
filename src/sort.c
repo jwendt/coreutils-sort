@@ -2323,9 +2323,6 @@ getmonth (char const *month, char **ea)
   return 0;
 }
 
-/* A randomly chosen MD5 state, used for random comparison.  */
-// static struct md5_ctx random_md5_state;
-
 /* Initialize the randomly chosen MD5 state.  */
 
 static void
@@ -2528,14 +2525,6 @@ mark_key (size_t offset, size_t width)
       putchar ('\n');
     }
 }
-
-/* Return true if KEY is a numeric key.  */
-
-/*static inline bool
-key_numeric (struct keyfield const *key)
-{
-  return key->numeric || key->general_numeric || key->human_numeric;
-}*/
 
 /* For LINE, output a debugging line that underlines KEY in LINE.
    If KEY is null, underline the whole line.  */
