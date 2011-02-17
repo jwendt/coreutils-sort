@@ -43,9 +43,7 @@ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaf
 
   compare out exp || fail=1
 
-# FIXME
-# Make sure to multiply by constant number of decimal places later
-printf -- "\
+  printf -- "\
 $INTMAX_UFLOW
 $INTMAX_MIN
 0
@@ -57,6 +55,16 @@ $INTMAX_OFLOW
 
   compare out exp || fail=1
 
+  printf -- "\
+$INTMAX_UFLOW
+$INTMAX_MIN
+0
+$INTMAX_MAX
+$INTMAX_OFLOW
+" > exp
+
+  tac exp | sort -h > out || fail=1
+
+  compare out exp || fail=1
+
 Exit $fail
-
-
