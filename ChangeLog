@@ -1,3 +1,7 @@
+2011-2-22 James Wendt <jwendt@cs.ucla.edu>
+	* src/sort.c (mergelines_lists, sequential_sort_lists): Added spaces around
+	parens to meet GNU's coding standards.
+
 2011-2-22 Drew Kutilek <dkutilek@ucla.edu>
 	* src/sort.c (line_discriminator, general_numeric_discriminator,
 	human_numeric_discriminator): Added and removed spaces around parens

@@ -3518,11 +3518,11 @@ mergelines_lists (struct line * lo_line, size_t nlo,
     size_t lo_counter = 0;
     size_t hi_counter = 0;
 
-    while(lo_counter < nlo && hi_counter < nhi)
+    while (lo_counter < nlo && hi_counter < nhi)
       {
-        if(compare (lo_line, hi_line) <= 0)
+        if (compare (lo_line, hi_line) <= 0)
           {
-            if(first)
+            if (first)
               {
                 top = lo_line;
                 bottom = lo_line;
@@ -3538,7 +3538,7 @@ mergelines_lists (struct line * lo_line, size_t nlo,
           }
         else
           {
-            if(first)
+            if (first)
               {
                 top = hi_line;
                 bottom = hi_line;
@@ -3554,9 +3554,9 @@ mergelines_lists (struct line * lo_line, size_t nlo,
           }
       }
 
-    if(lo_counter == nlo)
+    if (lo_counter == nlo)
       bottom->next = hi_line;
-    else if(hi_counter == nhi)
+    else if (hi_counter == nhi)
       bottom->next = lo_line;
 
     return top;
@@ -3569,7 +3569,7 @@ mergelines_lists (struct line * lo_line, size_t nlo,
 struct line *
 sequential_sort_lists (struct line * lines, size_t nlines)
 {
-    if(nlines == 1)
+    if (nlines == 1)
       return lines;
 
     size_t nlo = nlines/2;
@@ -3579,9 +3579,9 @@ sequential_sort_lists (struct line * lines, size_t nlines)
     struct line *hi_line = lines - nlo;
 
     /* sort each half */
-    if(nlo > 1)
+    if (nlo > 1)
         lo_line = sequential_sort_lists(lo_line, nlo);
-    if(nhi > 1)
+    if (nhi > 1)
         hi_line = sequential_sort_lists(hi_line, nhi);
 
     /* merge the sorted lists */
