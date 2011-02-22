@@ -1817,7 +1817,7 @@ human_numeric_discriminator (uintmax_t* discrim, const char* data)
 {
   /* The 8 bytes of the discriminator are used as follows:
      | 1 sign bit | 4 magnitude bits | 59 bits for number of digits |
-     Because positive numbers should be considered larger than negative, 
+     Because positive numbers should be considered larger than negative,
      the sign bit will be set to 1 for positive numbers, and 0 for negative
      numbers. */
 
@@ -1927,7 +1927,7 @@ general_numeric_discriminator (uintmax_t* discrim, const char* data)
 
   /* Get the value as a double from the string */
   char * endptr;
-  *doubleP = strtod(data,&endptr);
+  *doubleP = strtod (data,&endptr);
 
   /* Return 0 if strod does not perform a conversion */
   if (data == endptr)
@@ -1941,7 +1941,7 @@ general_numeric_discriminator (uintmax_t* discrim, const char* data)
 
   /* If negative, flip every bit, otherwise, set the sign bit.
      If positive flip only the sign bit.  */
-  if((*discrim >> 63) == 1 )
+  if ((*discrim >> 63) == 1)
     *discrim = ~(*discrim);
   else
     *discrim ^= 0x8000000000000000;
@@ -2017,15 +2017,15 @@ line_discriminator (struct line const *line, struct keyfield const *key)
         {
           if (key->numeric)
             {
-              numeric_discriminator(&discrim,t);
+              numeric_discriminator (&discrim,t);
             }
           else if (key->human_numeric)
             {
-              human_numeric_discriminator(&discrim,t);
+              human_numeric_discriminator (&discrim,t);
             }
           else if (key->general_numeric)
             {
-              general_numeric_discriminator(&discrim,t);
+              general_numeric_discriminator (&discrim,t);
             }
           else if (key->month)
             {
@@ -2069,7 +2069,7 @@ line_discriminator (struct line const *line, struct keyfield const *key)
         }
     }
 
-  if( key ? !(key->numeric || key->human_numeric || key->general_numeric ) : 1 )
+  if (key ? !(key->numeric || key->human_numeric || key->general_numeric ) : 1 )
     {
       for (size_t i = 0; i < sizeof discrim; i++)
         {
