@@ -23,10 +23,10 @@ print_ver_ sort
 LC_ALL=C getlimits_
 
   printf -- "\
-abcdefghijklmnop
-qrstuvwxyz
+abcdefghijklm
+nopqrstuvwxyz
 " > exp
-  tac exp | sort > out || fail=1
+  tac exp | sort -R --random-source=exp | sort > out || fail=1
 
   compare out exp || fail=1
 
@@ -39,7 +39,7 @@ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaae
 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaf
 " > exp
 
-  tac exp | sort > out || fail=1
+  tac exp | sort -R --random-source=exp | sort > out || fail=1
 
   compare out exp || fail=1
 
@@ -51,7 +51,7 @@ $INTMAX_MAX
 $INTMAX_OFLOW
 " > exp
 
-  tac exp | sort -n > out || fail=1
+  tac exp | sort -R --random-source=exp | sort -n > out || fail=1
 
   compare out exp || fail=1
 
@@ -63,7 +63,7 @@ $INTMAX_MAX
 $INTMAX_OFLOW
 " > exp
 
-  tac exp | sort -h > out || fail=1
+  tac exp | sort -R --random-source=exp | sort -h > out || fail=1
 
   compare out exp || fail=1
 

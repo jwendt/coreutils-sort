@@ -365,6 +365,16 @@ static bool debug;
    number are present, temp files will be used. */
 static unsigned int nmerge = NMERGE_DEFAULT;
 
+/* A randomly chosen MD5 state, used for random comparison.  */
+static struct md5_ctx random_md5_state;
+
+/* Table that maps characters to order-of-magnitude values.  */
+static char const unit_order[UCHAR_LIM];
+
+/* Forward declarations for use in line_discriminator.  */
+static int getmonth (char const *, char **);
+static inline bool key_numeric (struct keyfield const *key);
+
 /* Report MESSAGE for FILE, then clean up and exit.
    If FILE is null, it represents standard output.  */
 
@@ -1686,26 +1696,13 @@ limfield (struct line const *line, struct keyfield const *key)
   return ptr;
 }
 
-/* A randomly chosen MD5 state, used for random comparison.  */
-static struct md5_ctx random_md5_state;
-
-static int getmonth (char const *, char **);
-
-/* Return true if KEY is a numeric key.  */
-
-static inline bool
-key_numeric (struct keyfield const *key)
-{
-  return key->numeric || key->general_numeric || key->human_numeric;
-}
-
 /* Return an 8 byte discriminator of the type numeric */
 
 static uintmax_t
-numeric_discriminator (uintmax_t* discrim, const char* data)
+numeric_discriminator (uintmax_t *discrim, const char *data)
 {
   /* The 8 bytes of the discriminator are used as follows:
-     | 1 sign bit | 63 bits for number of digits |
+     | 1 sign bit | 63 bits for number representation |
      Because positive numbers should be considered larger than negative,
      the sign bit will be set to 1 for positie numbers, and 0 for negative
      numbers.  The discriminator will be multiplied by 100 to include two
@@ -1780,46 +1777,16 @@ numeric_discriminator (uintmax_t* discrim, const char* data)
   return *discrim;
 }
 
-/* Table that maps characters to order-of-magnitude values.  */
-static char const unit_order[UCHAR_LIM] =
-  {
-#if ! ('K' == 75 && 'M' == 77 && 'G' == 71 && 'T' == 84 && 'P' == 80 \
-     && 'E' == 69 && 'Z' == 90 && 'Y' == 89 && 'k' == 107)
-    /* This initializer syntax works on all C99 hosts.  For now, use
-       it only on non-ASCII hosts, to ease the pain of porting to
-       pre-C99 ASCII hosts.  */
-    ['K']=1, ['M']=2, ['G']=3, ['T']=4, ['P']=5, ['E']=6, ['Z']=7, ['Y']=8,
-    ['k']=1,
-#else
-    /* Generate the following table with this command:
-       perl -e 'my %a=(k=>1, K=>1, M=>2, G=>3, T=>4, P=>5, E=>6, Z=>7, Y=>8);
-       foreach my $i (0..255) {my $c=chr($i); $a{$c} ||= 0;print "$a{$c}, "}'\
-       |fmt  */
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 3,
-    0, 0, 0, 1, 0, 2, 0, 0, 5, 0, 0, 0, 4, 0, 0, 0, 0, 8, 7, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-#endif
-  };
-
 /* Return an 8 byte discriminator of the type human_numeric */
 
 static uintmax_t
-human_numeric_discriminator (uintmax_t* discrim, const char* data)
+human_numeric_discriminator (uintmax_t *discrim, const char *data)
 {
   /* The 8 bytes of the discriminator are used as follows:
-     | 1 sign bit | 4 magnitude bits | 59 bits for number of digits |
-     Because positive numbers should be considered larger than negative, 
+     | 1 sign bit | 4 magnitude bits | 59 bits for number representation |
+     Because positive numbers should be considered larger than negative,
      the sign bit will be set to 1 for positive numbers, and 0 for negative
      numbers. */
-
   int magnitude, nonzero = 0;
   bool positive = true, isdigit;
   uintmax_t set_magnitude, MAXIMUM = (UINTMAX_MAX>>5)/10;
@@ -1916,17 +1883,22 @@ human_numeric_discriminator (uintmax_t* discrim, const char* data)
 /* Return an 8 byte discriminator of the type general_numeric */
 
 static uintmax_t
-general_numeric_discriminator (uintmax_t* discrim, const char* data)
+general_numeric_discriminator (uintmax_t *discrim, const char *data)
 {
   /* Because positive numbers should be considered larger than negative,
      the sign bit will be set to 1 for positive numbers, and negative numbers
      will have all of their bits flipped. */
+  
+  /* Check for IEEE floating point support. */
+  #if defined __amd64__ || defined __x86_64__ || \
+      defined __i386__ || defined __ia64__
+  
   *discrim = 0;
-  double* doubleP = (double*) discrim;
+  double *dblp = (double*) discrim;
 
   /* Get the value as a double from the string */
-  char * endptr;
-  *doubleP = strtod(data,&endptr);
+  char *endptr;
+  *dblp = strtod (data, &endptr);
 
   /* Return 0 if strod does not perform a conversion */
   if (data == endptr)
@@ -1940,11 +1912,16 @@ general_numeric_discriminator (uintmax_t* discrim, const char* data)
 
   /* If negative, flip every bit, otherwise, set the sign bit.
      If positive flip only the sign bit.  */
-  if((*discrim >> 63) == 1 )
+  if ((*discrim >> 63) == 1)
     *discrim = ~(*discrim);
   else
     *discrim ^= 0x8000000000000000;
 
+  /* No IEEE floating point */
+  #else
+  *discrim = 0;
+
+  #endif
   return *discrim;
 }
 
@@ -2016,15 +1993,15 @@ line_discriminator (struct line const *line, struct keyfield const *key)
         {
           if (key->numeric)
             {
-              numeric_discriminator(&discrim,t);
+              numeric_discriminator (&discrim, t);
             }
           else if (key->human_numeric)
             {
-              human_numeric_discriminator(&discrim,t);
+              human_numeric_discriminator (&discrim, t);
             }
           else if (key->general_numeric)
             {
-              general_numeric_discriminator(&discrim,t);
+              general_numeric_discriminator (&discrim, t);
             }
           else if (key->month)
             {
@@ -2035,7 +2012,9 @@ line_discriminator (struct line const *line, struct keyfield const *key)
           else if (key->version)
             {
               /* FIXME not yet implemented */
-              discrim = 0;
+              memset (stackbuf, 0, sizeof discrim);
+              t = stackbuf;
+              tlen = sizeof discrim;
             }
           else if (key->random)
             {
@@ -2059,7 +2038,9 @@ line_discriminator (struct line const *line, struct keyfield const *key)
         {
           compare_with_strxfrm:;
           /* FIXME not yet implemented */
-          return 0;
+          memset (stackbuf, 0, sizeof discrim);
+          t = stackbuf;
+          tlen = sizeof discrim;
         }
       else
         {
@@ -2068,7 +2049,7 @@ line_discriminator (struct line const *line, struct keyfield const *key)
         }
     }
 
-  if( key ? !(key->numeric || key->human_numeric || key->general_numeric ) : 1 )
+  if (key ? !(key->numeric || key->human_numeric || key->general_numeric) : 1)
     {
       for (size_t i = 0; i < sizeof discrim; i++)
         {
@@ -2186,6 +2167,35 @@ fillbuf (struct buffer *buf, FILE *fp, char const *file)
       }
     }
 }
+
+/* Table that maps characters to order-of-magnitude values.  */
+static char const unit_order[UCHAR_LIM] =
+  {
+#if ! ('K' == 75 && 'M' == 77 && 'G' == 71 && 'T' == 84 && 'P' == 80 \
+     && 'E' == 69 && 'Z' == 90 && 'Y' == 89 && 'k' == 107)
+    /* This initializer syntax works on all C99 hosts.  For now, use
+       it only on non-ASCII hosts, to ease the pain of porting to
+       pre-C99 ASCII hosts.  */
+    ['K']=1, ['M']=2, ['G']=3, ['T']=4, ['P']=5, ['E']=6, ['Z']=7, ['Y']=8,
+    ['k']=1,
+#else
+    /* Generate the following table with this command:
+       perl -e 'my %a=(k=>1, K=>1, M=>2, G=>3, T=>4, P=>5, E=>6, Z=>7, Y=>8);
+       foreach my $i (0..255) {my $c=chr($i); $a{$c} ||= 0;print "$a{$c}, "}'\
+       |fmt  */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 3,
+    0, 0, 0, 1, 0, 2, 0, 0, 5, 0, 0, 0, 4, 0, 0, 0, 0, 8, 7, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+#endif
+  };
 
 /* Return an integer that represents the order of magnitude of the
    unit following the number.  The number may contain thousands
@@ -2528,6 +2538,14 @@ mark_key (size_t offset, size_t width)
 
       putchar ('\n');
     }
+}
+
+/* Return true if KEY is a numeric key.  */
+
+static inline bool
+key_numeric (struct keyfield const *key)
+{
+  return key->numeric || key->general_numeric || key->human_numeric;
 }
 
 /* For LINE, output a debugging line that underlines KEY in LINE.
