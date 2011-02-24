@@ -184,6 +184,7 @@ struct line
     and after B if A->discrim > B->discrim, but if two discrim values
     are equal the lines may not necessarily compare equal.  */
   uintmax_t discrim;		/* Discriminator for quick comparisons */
+  struct line * next;		/* Pointer to next line in sorted order */
 };
 
 /* Input buffers. */
@@ -3513,6 +3514,101 @@ sequential_sort (struct line *restrict lines, size_t nlines,
     }
 }
 
+
+/* FIXME: return this struct from mergelines_lists() and sequential_sort_lists()
+   Allows for returning front and back pointers to sorted linked list */
+struct sorted_ends
+{
+    struct line *start;
+    struct line *end;
+};
+
+
+/* Merge in place the sorted linked lists lo_line and hi_line */
+struct line *
+mergelines_lists (struct line * lo_line, size_t nlo,
+                  struct line * hi_line, size_t nhi){
+
+    struct line *top;
+    struct line *bottom;
+    bool first = true;
+
+    size_t lo_counter = 0;
+    size_t hi_counter = 0;
+
+    while (lo_counter < nlo && hi_counter < nhi)
+      {
+        if (compare (lo_line, hi_line) <= 0)
+          {
+            if (first)
+              {
+                top = lo_line;
+                bottom = lo_line;
+                first = false;
+              }
+            else
+              {
+                bottom->next = lo_line;
+                bottom = bottom->next;
+              }
+            lo_line = lo_line->next;
+            lo_counter++;
+          }
+        else
+          {
+            if (first)
+              {
+                top = hi_line;
+                bottom = hi_line;
+                first = false;
+              }
+            else
+              {
+                bottom->next = hi_line;
+                bottom = bottom->next;
+              }
+            hi_line = hi_line->next;
+            hi_counter++;
+          }
+      }
+
+    if (lo_counter == nlo)
+      bottom->next = hi_line;
+    else if (hi_counter == nhi)
+      bottom->next = lo_line;
+
+    return top;
+}
+
+
+/* FIXME: return value should be a tuple: head and tail of sorted linked list. */
+/* Merge sort lines using one thread. Returned value is the head of the sorted
+   linked list. */
+struct line *
+sequential_sort_lists (struct line * lines, size_t nlines)
+{
+    if (nlines == 1)
+      return lines;
+
+    size_t nlo = nlines/2;
+    size_t nhi = nlines - nlo;
+
+    struct line *lo_line = lines;
+    struct line *hi_line = lines - nlo;
+
+    /* sort each half */
+    if (nlo > 1)
+        lo_line = sequential_sort_lists(lo_line, nlo);
+    if (nhi > 1)
+        hi_line = sequential_sort_lists(hi_line, nhi);
+
+    /* merge the sorted lists */
+    lo_line = mergelines_lists(lo_line, nlo, hi_line, nhi);
+
+    return lo_line;
+}
+
+
 static struct merge_node *init_node (struct merge_node *restrict,
                                      struct merge_node *restrict,
                                      struct line *, size_t, size_t, bool);
@@ -3929,6 +4025,7 @@ sortlines (struct line *restrict lines, size_t nthreads,
     }
   else
     {
+      /* FIXME: do away with sequential_sort entirely */
       /* Nthreads = 1, this is a leaf NODE, or pthread_create failed.
          Sort with 1 thread. */
       size_t nlo = node->nlo;
@@ -3939,6 +4036,23 @@ sortlines (struct line *restrict lines, size_t nthreads,
       if (1 < nlo)
         sequential_sort (lines, nlo, temp, false);
 
+        /* Nthreads = 1, this is a leaf NODE, or pthread_create failed.
+         Sort with 1 thread. */
+      struct line * lo_line;
+      if (1 < nlo)
+        lo_line = sequential_sort_lists(lines - 1, nlo);
+      else
+        lo_line  = lines-1;
+
+      struct line * hi_line;
+      if (1 < nhi)
+        hi_line = sequential_sort_lists(lines - nlo - 1, nhi);
+      else
+        hi_line = lines - nlo - 1;
+
+      /* FIXME: must obtain node->end_lo and node->end_hi from
+         sequental_sort(). node->lo and node->hi should be set to lo_line and
+         hi_line respectivaly */
       /* Update merge NODE. No need to lock yet. */
       node->lo = lines;
       node->hi = lines - nlo;
