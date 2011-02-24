@@ -1729,7 +1729,7 @@ numeric_discriminator (uintmax_t *discrim, const char *data)
     data++;
 
   /* Convert number to integer */
-  while (digit = ISDIGIT (*data) || *data == thousands_sep)
+  while ((digit = ISDIGIT (*data)) || *data == thousands_sep)
     {
       if (digit)
       {
@@ -1811,7 +1811,7 @@ human_numeric_discriminator (uintmax_t *discrim, const char *data)
     data++;
 
   /* Convert number to integer */
-  while (digit = ISDIGIT (*data) || *data == thousands_sep)
+  while ((digit = ISDIGIT (*data)) || *data == thousands_sep)
     {
       if (digit)
         {
@@ -1848,7 +1848,7 @@ human_numeric_discriminator (uintmax_t *discrim, const char *data)
       if (*data == decimal_point)
         while (ISDIGIT (*data))
           data++;
-      magnitude = unit_order[*data];
+      magnitude = unit_order[to_uchar (*data)];
     }
   /* Set magnitude bits */
   else
@@ -1859,7 +1859,7 @@ human_numeric_discriminator (uintmax_t *discrim, const char *data)
           nonzero |= ch - '0';
 
       if (nonzero || *discrim > 0)
-        magnitude = unit_order[ch];
+        magnitude = unit_order[to_uchar (ch)];
       else
         magnitude = 0;
     }
@@ -1889,16 +1889,16 @@ general_numeric_discriminator (uintmax_t *discrim, const char *data)
   /* Because positive numbers should be considered larger than negative,
      the sign bit will be set to 1 for positive numbers, and negative numbers
      will have all of their bits flipped. */
+  char *endptr;
 
   /* Check for IEEE floating point support. */
   #if defined __amd64__ || defined __x86_64__ || \
       defined __i386__ || defined __ia64__
+  typedef double __attribute__((__may_alias__)) dbldiscrim;
 
-  *discrim = 0;
-  double *dblp = (double*) discrim;
+  dbldiscrim *dblp = (dbldiscrim*) discrim;
 
   /* Get the value as a double from the string */
-  char *endptr;
   *dblp = strtod (data, &endptr);
 
   /* Return 0 if strod does not perform a conversion */
@@ -1920,7 +1920,7 @@ general_numeric_discriminator (uintmax_t *discrim, const char *data)
 
   /* No IEEE floating point */
   #else
-  *discrim = 0;
+  *discrim = (uintmax_t) strtod (data, &endptr);
 
   #endif
   return *discrim;
