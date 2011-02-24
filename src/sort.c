@@ -1708,7 +1708,7 @@ numeric_discriminator (uintmax_t *discrim, const char *data)
      the sign bit will be set to 1 for positie numbers, and 0 for negative
      numbers.  The discriminator will be multiplied by 100 to include two
      decimal places. */
-  bool positive = true, isdigit;
+  bool positive = true, digit;
   uintmax_t MAXIMUM = (UINTMAX_MAX>>1)/100;
   int i;
   *discrim = 0;
@@ -1729,9 +1729,9 @@ numeric_discriminator (uintmax_t *discrim, const char *data)
     data++;
 
   /* Convert number to integer */
-  while (isdigit = ISDIGIT (*data) || *data == thousands_sep)
+  while (digit = ISDIGIT (*data) || *data == thousands_sep)
     {
-      if (isdigit)
+      if (digit)
       {
         *discrim *= 10;
         *discrim += (*data - '0');
@@ -1789,7 +1789,7 @@ human_numeric_discriminator (uintmax_t *discrim, const char *data)
      the sign bit will be set to 1 for positive numbers, and 0 for negative
      numbers. */
   int magnitude, nonzero = 0;
-  bool positive = true, isdigit;
+  bool positive = true, digit;
   uintmax_t set_magnitude, MAXIMUM = (UINTMAX_MAX>>5)/10;
   char ch;
 
@@ -1811,9 +1811,9 @@ human_numeric_discriminator (uintmax_t *discrim, const char *data)
     data++;
 
   /* Convert number to integer */
-  while (isdigit = ISDIGIT (*data) || *data == thousands_sep)
+  while (digit = ISDIGIT (*data) || *data == thousands_sep)
     {
-      if (isdigit)
+      if (digit)
         {
           *discrim *= 10;
           *discrim += (*data -'0');
@@ -3102,7 +3102,6 @@ check (char const *file_name, char checkonly)
   struct line temp;		/* Copy of previous line. */
   size_t alloc = 0;
   uintmax_t line_number = 0;
-  struct keyfield const *key = keylist;
   bool nonunique = ! unique;
   bool ordered = true;
 
@@ -3226,7 +3225,6 @@ mergefps (struct sortfile *files, size_t ntemps, size_t nfiles,
   size_t i;
   size_t j;
   size_t t;
-  struct keyfield const *key = keylist;
   saved.text = NULL;
 
   /* Read initial lines from each input file. */
