@@ -1,3 +1,21 @@
+2011-2-22 James Wendt <jwendt@cs.ucla.edu>
+	* src/sort.c (mergelines_lists, sequential_sort_lists): Added spaces around
+	parens to meet GNU's coding standards.
+
+2011-2-22 Drew Kutilek <dkutilek@ucla.edu>
+	* src/sort.c (line_discriminator, general_numeric_discriminator,
+	human_numeric_discriminator): Added and removed spaces around parens
+	to meet GNU's coding standards.
+
+2011-2-22 James Wendt <jwendt@cs.ucla.edu>
+	* src/sort.c (struct line): Added pointer to next sorted line.
+	* src/sort.c (struct sorted_ends): New struct to house tuple (start,
+	end) of sorted linked list of lines (not yet implemented).
+	* src/sort.c (mergelines_lists): New function. Merges two linked lists of
+	lines in place.
+	* src/sort.c (sequental_sort_lists): New function. Sorts and merges linked
+	lists of lines.
+
 2011-2-16 Drew Kutilek <dkutilek@ucla.edu>
 	* tests/misc/sort-discrim: added another test case for human
 	numeric.
@@ -63,8 +81,8 @@
 
 2011-2-2 Kevin Deng <dengchao@gmail.com>
 	* src/sort.c (version_discriminator): Removed the discriminator
-        generator. Not going to submit it to GNU due to unclear functionality
-        of -V mode, as well as lack of performance gain.
+	generator. Not going to submit it to GNU due to unclear functionality
+	of -V mode, as well as lack of performance gain.
 
 2011-2-2 Drew Kutilek <dkutilek@ucla.edu>
 	* src/sort.c (numeric_discriminator): handles overflow correctly now
@@ -111,8 +129,8 @@
 2011-1-31 Kevin Deng <dengchao@gmail.com>
 	* src/sort.c (version_discriminator): Removed previous implementation.
 	Current GNU implementation doesn't do what documentation says it's 
-        supposed to do. Added new implementation of discrim that follows what 
-        GNU currently actually does.
+	supposed to do. Added new implementation of discrim that follows what 
+	GNU currently actually does.
 
 2011-1-31 James Wendt <jwendt@cs.ucla.edu>
 	* src/sort.c (general_numeric_discriminator): Handles non general numeric
