@@ -1,3 +1,7 @@
+2011-2-23 Drew Kutilek <dkutilek@ucla.edu>
+	* src/sort.c (*_discriminator): fixed formatting to meet GNU standards
+	* src/sort.c (general_numeric_discriminator): Now checks for x86
+
 2011-2-22 James Wendt <jwendt@cs.ucla.edu>
 	* src/sort.c (mergelines_lists, sequential_sort_lists): Added spaces around
 	parens to meet GNU's coding standards.
