@@ -1891,6 +1891,8 @@ general_numeric_discriminator (uintmax_t *discrim, const char *data)
      will have all of their bits flipped. */
   char *endptr;
 
+  char *endptr;
+
   /* Check for IEEE floating point support. */
   #if defined __amd64__ || defined __x86_64__ || \
       defined __i386__ || defined __ia64__
