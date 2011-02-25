@@ -3797,6 +3797,12 @@ mergelines_node (struct merge_node *restrict node, size_t total_lines,
   size_t merged_lo;
   size_t merged_hi;
 
+  /* FIXME: Implement linked list implementation by replacing:
+        `--dest' with `dest = dest->next'
+        `--node->lo' with `node->lo = node->lo->next'
+     Also, keep count of merged_lo and merged_hi since we can no longer
+     compute these values by measuring array separation. */
+
   if (node->level > MERGE_ROOT)
     {
       /* Merge to destination buffer. */
@@ -4011,11 +4017,12 @@ sortlines (struct line *restrict lines, size_t nthreads,
     }
   else
     {
-      /* FIXME: do away with sequential_sort entirely */
       /* Nthreads = 1, this is a leaf NODE, or pthread_create failed.
          Sort with 1 thread. */
       size_t nlo = node->nlo;
       size_t nhi = node->nhi;
+      
+      /* FIXME: delete the 5 lines below that sorts using log P memory*/
       struct line *temp = lines - total_lines;
       if (1 < nhi)
         sequential_sort (lines - nlo, nhi, temp - nlo / 2, false);
@@ -4042,8 +4049,9 @@ sortlines (struct line *restrict lines, size_t nthreads,
           hi_line->next = &empty_line;
         }
 
-      /* FIXME: lo should point to lo_line, hi should point to hi_line, and end
-         should point to &empty_line for linked list implementation */
+      /* FIXME: node->lo should point to lo_line, node->hi should point to
+         hi_line, and and node->end_* should point to &empty_line for linked
+         list implementation. */
       /* Update merge NODE. No need to lock yet. */
       node->lo = lines;
       node->hi = lines - nlo;
