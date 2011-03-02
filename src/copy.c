@@ -36,6 +36,7 @@
 #include "buffer-lcm.h"
 #include "copy.h"
 #include "cp-hash.h"
+#include "extent-scan.h"
 #include "error.h"
 #include "fcntl--.h"
 #include "file-set.h"
@@ -129,6 +130,109 @@ utimens_symlink (char const *file, struct timespec const *timespec)
   return err;
 }
 
+/* Copy the regular file open on SRC_FD/SRC_NAME to DST_FD/DST_NAME,
+   honoring the MAKE_HOLES setting and using the BUF_SIZE-byte buffer
+   BUF for temporary storage.  Copy no more than MAX_N_READ bytes.
+   Return true upon successful completion;
+   print a diagnostic and return false upon error.
+   Note that for best results, BUF should be "well"-aligned.
+   BUF must have sizeof(uintptr_t)-1 bytes of additional space
+   beyond BUF[BUF_SIZE-1].
+   Set *LAST_WRITE_MADE_HOLE to true if the final operation on
+   DEST_FD introduced a hole.  Set *TOTAL_N_READ to the number of
+   bytes read.  */
+static bool
+sparse_copy (int src_fd, int dest_fd, char *buf, size_t buf_size,
+             bool make_holes,
+             char const *src_name, char const *dst_name,
+             uintmax_t max_n_read, off_t *total_n_read,
+             bool *last_write_made_hole)
+{
+  typedef uintptr_t word;
+  *last_write_made_hole = false;
+  *total_n_read = 0;
+
+  while (max_n_read)
+    {
+      word *wp = NULL;
+
+      ssize_t n_read = read (src_fd, buf, MIN (max_n_read, buf_size));
+      if (n_read < 0)
+        {
+          if (errno == EINTR)
+            continue;
+          error (0, errno, _("reading %s"), quote (src_name));
+          return false;
+        }
+      if (n_read == 0)
+        break;
+      max_n_read -= n_read;
+      *total_n_read += n_read;
+
+      if (make_holes)
+        {
+          char *cp;
+
+          /* Sentinel to stop loop.  */
+          buf[n_read] = '\1';
+#ifdef lint
+          /* Usually, buf[n_read] is not the byte just before a "word"
+             (aka uintptr_t) boundary.  In that case, the word-oriented
+             test below (*wp++ == 0) would read some uninitialized bytes
+             after the sentinel.  To avoid false-positive reports about
+             this condition (e.g., from a tool like valgrind), set the
+             remaining bytes -- to any value.  */
+          memset (buf + n_read + 1, 0, sizeof (word) - 1);
+#endif
+
+          /* Find first nonzero *word*, or the word with the sentinel.  */
+
+          wp = (word *) buf;
+          while (*wp++ == 0)
+            continue;
+
+          /* Find the first nonzero *byte*, or the sentinel.  */
+
+          cp = (char *) (wp - 1);
+          while (*cp++ == 0)
+            continue;
+
+          if (cp <= buf + n_read)
+            /* Clear to indicate that a normal write is needed. */
+            wp = NULL;
+          else
+            {
+              /* We found the sentinel, so the whole input block was zero.
+                 Make a hole.  */
+              if (lseek (dest_fd, n_read, SEEK_CUR) < 0)
+                {
+                  error (0, errno, _("cannot lseek %s"), quote (dst_name));
+                  return false;
+                }
+              *last_write_made_hole = true;
+            }
+        }
+
+      if (!wp)
+        {
+          size_t n = n_read;
+          if (full_write (dest_fd, buf, n) != n)
+            {
+              error (0, errno, _("writing %s"), quote (dst_name));
+              return false;
+            }
+          *last_write_made_hole = false;
+
+          /* It is tempting to return early here upon a short read from a
+             regular file.  That would save the final read syscall for each
+             file.  Unfortunately that doesn't work for certain files in
+             /proc with linux kernels from at least 2.6.9 .. 2.6.29.  */
+        }
+    }
+
+  return true;
+}
+
 /* Perform the O(1) btrfs clone operation, if possible.
    Upon success, return 0.  Otherwise, return -1 and set errno.  */
 static inline int
@@ -146,6 +250,160 @@ clone_file (int dest_fd, int src_fd)
   errno = ENOTSUP;
   return -1;
 #endif
+}
+
+/* Write N_BYTES zero bytes to file descriptor FD.  Return true if successful.
+   Upon write failure, set errno and return false.  */
+static bool
+write_zeros (int fd, uint64_t n_bytes)
+{
+  static char *zeros;
+  static size_t nz = IO_BUFSIZE;
+
+  /* Attempt to use a relatively large calloc'd source buffer for
+     efficiency, but if that allocation fails, resort to a smaller
+     statically allocated one.  */
+  if (zeros == NULL)
+    {
+      static char fallback[1024];
+      zeros = calloc (nz, 1);
+      if (zeros == NULL)
+        {
+          zeros = fallback;
+          nz = sizeof fallback;
+        }
+    }
+
+  while (n_bytes)
+    {
+      uint64_t n = MIN (nz, n_bytes);
+      if ((full_write (fd, zeros, n)) != n)
+        return false;
+      n_bytes -= n;
+    }
+
+  return true;
+}
+
+/* Perform an efficient extent copy, if possible.  This avoids
+   the overhead of detecting holes in hole-introducing/preserving
+   copy, and thus makes copying sparse files much more efficient.
+   Upon a successful copy, return true.  If the initial extent scan
+   fails, set *NORMAL_COPY_REQUIRED to true and return false.
+   Upon any other failure, set *NORMAL_COPY_REQUIRED to false and
+   return false.  */
+static bool
+extent_copy (int src_fd, int dest_fd, char *buf, size_t buf_size,
+             off_t src_total_size, enum Sparse_type sparse_mode,
+             char const *src_name, char const *dst_name,
+             bool *require_normal_copy)
+{
+  struct extent_scan scan;
+  off_t last_ext_start = 0;
+  uint64_t last_ext_len = 0;
+
+  /* Keep track of the output position.
+     We may need this at the end, for a final ftruncate.  */
+  off_t dest_pos = 0;
+
+  extent_scan_init (src_fd, &scan);
+
+  *require_normal_copy = false;
+  bool wrote_hole_at_eof = true;
+  do
+    {
+      bool ok = extent_scan_read (&scan);
+      if (! ok)
+        {
+          if (scan.hit_final_extent)
+            break;
+
+          if (scan.initial_scan_failed)
+            {
+              *require_normal_copy = true;
+              return false;
+            }
+
+          error (0, errno, _("%s: failed to get extents info"),
+                 quote (src_name));
+          return false;
+        }
+
+      unsigned int i;
+      for (i = 0; i < scan.ei_count; i++)
+        {
+          off_t ext_start = scan.ext_info[i].ext_logical;
+          uint64_t ext_len = scan.ext_info[i].ext_length;
+          uint64_t hole_size = ext_start - last_ext_start - last_ext_len;
+
+          if (hole_size)
+            {
+              if (lseek (src_fd, ext_start, SEEK_SET) < 0)
+                {
+                  error (0, errno, _("cannot lseek %s"), quote (src_name));
+                fail:
+                  extent_scan_free (&scan);
+                  return false;
+                }
+
+              if (sparse_mode != SPARSE_NEVER)
+                {
+                  if (lseek (dest_fd, ext_start, SEEK_SET) < 0)
+                    {
+                      error (0, errno, _("cannot lseek %s"), quote (dst_name));
+                      goto fail;
+                    }
+                }
+              else
+                {
+                  /* When not inducing holes and when there is a hole between
+                     the end of the previous extent and the beginning of the
+                     current one, write zeros to the destination file.  */
+                  if (! write_zeros (dest_fd, hole_size))
+                    {
+                      error (0, errno, _("%s: write failed"), quote (dst_name));
+                      goto fail;
+                    }
+                }
+            }
+
+          last_ext_start = ext_start;
+          last_ext_len = ext_len;
+
+          off_t n_read;
+          if ( ! sparse_copy (src_fd, dest_fd, buf, buf_size,
+                              sparse_mode == SPARSE_ALWAYS, src_name, dst_name,
+                              ext_len, &n_read,
+                              &wrote_hole_at_eof))
+            return false;
+
+          dest_pos = ext_start + n_read;
+        }
+
+      /* Release the space allocated to scan->ext_info.  */
+      extent_scan_free (&scan);
+
+    }
+  while (! scan.hit_final_extent);
+
+  /* When the source file ends with a hole, we have to do a little more work,
+     since the above copied only up to and including the final extent.
+     In order to complete the copy, we may have to insert a hole or write
+     zeros in the destination corresponding to the source file's hole-at-EOF.
+
+     In addition, if the final extent was a block of zeros at EOF and we've
+     just converted them to a hole in the destination, we must call ftruncate
+     here in order to record the proper length in the destination.  */
+  if ((dest_pos < src_total_size || wrote_hole_at_eof)
+      && (sparse_mode != SPARSE_NEVER
+          ? ftruncate (dest_fd, src_total_size)
+          : ! write_zeros (dest_fd, src_total_size - dest_pos)))
+    {
+      error (0, errno, _("failed to extend %s"), quote (dst_name));
+      return false;
+    }
+
+  return true;
 }
 
 /* FIXME: describe */
@@ -647,7 +905,6 @@ copy_reg (char const *src_name, char const *dst_name,
   if (data_copy_required)
     {
       typedef uintptr_t word;
-      off_t n_read_total = 0;
 
       /* Choose a suitable buffer size; it may be adjusted later.  */
       size_t buf_alignment = lcm (getpagesize (), sizeof (word));
@@ -655,7 +912,6 @@ copy_reg (char const *src_name, char const *dst_name,
       size_t buf_size = io_blksize (sb);
 
       /* Deal with sparse files.  */
-      bool last_write_made_hole = false;
       bool make_holes = false;
 
       if (S_ISREG (sb.st_mode))
@@ -704,106 +960,39 @@ copy_reg (char const *src_name, char const *dst_name,
       buf_alloc = xmalloc (buf_size + buf_alignment_slop);
       buf = ptr_align (buf_alloc, buf_alignment);
 
-      while (true)
+      bool normal_copy_required;
+      /* Perform an efficient extent-based copy, falling back to the
+         standard copy only if the initial extent scan fails.  If the
+         '--sparse=never' option is specified, write all data but use
+         any extents to read more efficiently.  */
+      if (extent_copy (source_desc, dest_desc, buf, buf_size,
+                       src_open_sb.st_size,
+                       S_ISREG (sb.st_mode) ? x->sparse_mode : SPARSE_NEVER,
+                       src_name, dst_name, &normal_copy_required))
+        goto preserve_metadata;
+
+      if (! normal_copy_required)
         {
-          word *wp = NULL;
-
-          ssize_t n_read = read (source_desc, buf, buf_size);
-          if (n_read < 0)
-            {
-#ifdef EINTR
-              if (errno == EINTR)
-                continue;
-#endif
-              error (0, errno, _("reading %s"), quote (src_name));
-              return_val = false;
-              goto close_src_and_dst_desc;
-            }
-          if (n_read == 0)
-            break;
-
-          n_read_total += n_read;
-
-          if (make_holes)
-            {
-              char *cp;
-
-              /* Sentinel to stop loop.  */
-              buf[n_read] = '\1';
-#ifdef lint
-              /* Usually, buf[n_read] is not the byte just before a "word"
-                 (aka uintptr_t) boundary.  In that case, the word-oriented
-                 test below (*wp++ == 0) would read some uninitialized bytes
-                 after the sentinel.  To avoid false-positive reports about
-                 this condition (e.g., from a tool like valgrind), set the
-                 remaining bytes -- to any value.  */
-              memset (buf + n_read + 1, 0, sizeof (word) - 1);
-#endif
-
-              /* Find first nonzero *word*, or the word with the sentinel.  */
-
-              wp = (word *) buf;
-              while (*wp++ == 0)
-                continue;
-
-              /* Find the first nonzero *byte*, or the sentinel.  */
-
-              cp = (char *) (wp - 1);
-              while (*cp++ == 0)
-                continue;
-
-              if (cp <= buf + n_read)
-                /* Clear to indicate that a normal write is needed. */
-                wp = NULL;
-              else
-                {
-                  /* We found the sentinel, so the whole input block was zero.
-                     Make a hole.  */
-                  if (lseek (dest_desc, n_read, SEEK_CUR) < 0)
-                    {
-                      error (0, errno, _("cannot lseek %s"), quote (dst_name));
-                      return_val = false;
-                      goto close_src_and_dst_desc;
-                    }
-                  last_write_made_hole = true;
-                }
-            }
-
-          if (!wp)
-            {
-              size_t n = n_read;
-              if (full_write (dest_desc, buf, n) != n)
-                {
-                  error (0, errno, _("writing %s"), quote (dst_name));
-                  return_val = false;
-                  goto close_src_and_dst_desc;
-                }
-              last_write_made_hole = false;
-
-              /* It is tempting to return early here upon a short read from a
-                 regular file.  That would save the final read syscall for each
-                 file.  Unfortunately that doesn't work for certain files in
-                 /proc with linux kernels from at least 2.6.9 .. 2.6.29.  */
-            }
+          return_val = false;
+          goto close_src_and_dst_desc;
         }
 
-      /* If the file ends with a `hole', we need to do something to record
-         the length of the file.  On modern systems, calling ftruncate does
-         the job.  On systems without native ftruncate support, we have to
-         write a byte at the ending position.  Otherwise the kernel would
-         truncate the file at the end of the last write operation.  */
-
-      if (last_write_made_hole)
+      off_t n_read;
+      bool wrote_hole_at_eof;
+      if ( ! sparse_copy (source_desc, dest_desc, buf, buf_size,
+                          make_holes, src_name, dst_name,
+                          UINTMAX_MAX, &n_read,
+                          &wrote_hole_at_eof)
+           || (wrote_hole_at_eof &&
+               ftruncate (dest_desc, n_read) < 0))
         {
-          if (ftruncate (dest_desc, n_read_total) < 0)
-            {
-              error (0, errno, _("truncating %s"), quote (dst_name));
-              return_val = false;
-              goto close_src_and_dst_desc;
-            }
+          error (0, errno, _("failed to extend %s"), quote (dst_name));
+          return_val = false;
+          goto close_src_and_dst_desc;
         }
     }
 
+preserve_metadata:
   if (x->preserve_timestamps)
     {
       struct timespec timespec[2];

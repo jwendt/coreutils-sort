@@ -214,7 +214,7 @@ find_field (struct linebuffer const *line)
   size_t size = line->length - 1;
   size_t i = 0;
 
-  for (count = 0; count < skip_fields; count++)
+  for (count = 0; count < skip_fields && i < size; count++)
     {
       while (i < size && isblank (to_uchar (lp[i])))
         i++;
@@ -222,8 +222,7 @@ find_field (struct linebuffer const *line)
         i++;
     }
 
-  for (count = 0; count < skip_chars && i < size; count++)
-    i++;
+  i += MIN (skip_chars, size - i);
 
   return line->buffer + i;
 }

@@ -217,6 +217,7 @@ Common Options
 * Exit status::                  Indicating program success or failure
 * Backup options::               Backup options
 * Block size::                   Block size
+* Floating point::               Floating point number representation
 * Signal specifications::        Specifying signals
 * Disambiguating names and IDs:: chgrp and chown owner and group syntax
 * Random sources::               Sources of random data
@@ -624,7 +625,7 @@ Remove any trailing slashes from each @var{source} argument.
 @macro mayConflictWithShellBuiltIn{cmd}
 @cindex conflicts with shell built-ins
 @cindex built-in shell commands, conflicts with
-Due to shell aliases and built-in @command{\cmd\} command, using an
+Due to shell aliases and built-in @command{\cmd\} functions, using an
 unadorned @command{\cmd\} interactively or in a script may get you
 different functionality than that described here.  Invoke it via
 @command{env} (i.e., @code{env \cmd\ @dots{}}) to avoid interference
@@ -729,6 +730,7 @@ name.
 * Exit status::                 Indicating program success or failure.
 * Backup options::              -b -S, in some programs.
 * Block size::                  BLOCK_SIZE and --block-size, in some programs.
+* Floating point::              Floating point number representation.
 * Signal specifications::       Specifying signals using the --signal option.
 * Disambiguating names and IDs:: chgrp and chown owner and group syntax
 * Random sources::              --random-source, in some programs.
@@ -1010,6 +1012,34 @@ is the default unless the @env{POSIXLY_CORRECT} environment variable is
 set.  The @option{-h} or @option{--human-readable} option is equivalent to
 @option{--block-size=human-readable}.  The @option{--si} option is
 equivalent to @option{--block-size=si}.
+
+@node Floating point
+@section Floating point numbers
+@cindex floating point
+@cindex IEEE floating point
+
+Commands that accept or produce floating point numbers employ the
+floating point representation of the underlying system, and suffer
+from rounding error, overflow, and similar floating-point issues.
+Almost all modern systems use IEEE-754 floating point, and it is
+typically portable to assume IEEE-754 behavior these days.  IEEE-754
+has positive and negative infinity, distinguishes positive from
+negative zero, and uses special values called NaNs to represent
+invalid computations such as dividing zero by itself.  For more
+information, please see David Goldberg's paper
+@uref{http://@/www.validlab.com/@/goldberg/@/paper.pdf, What Every
+Computer Scientist Should Know About Floating-Point Arithmetic}.
+
+@vindex LC_NUMERIC
+Commands that accept floating point numbers as options, operands or
+input use the standard C functions @code{strtod} and @code{strtold} to
+convert from text to floating point numbers.  These floating point
+numbers therefore can use scientific notation like @code{1.0e-34} and
+@code{-10e100}.  Modern C implementations also accept hexadecimal
+floating point numbers such as @code{-0x.ep-3}, which stands for
+@minus{}14/16 times @math{2^-3}, which equals @minus{}0.109375.  The
+@env{LC_NUMERIC} locale determines the decimal-point character.
+@xref{Parsing of Floats,,, libc, The GNU C Library Reference Manual}.
 
 @node Signal specifications
 @section Signal specifications
@@ -1880,7 +1910,7 @@ named character, ignoring high-order bit
 @item d
 signed decimal
 @item f
-floating point
+floating point (@pxref{Floating point})
 @item o
 octal
 @item u
@@ -2820,8 +2850,7 @@ During one iteration, every specified file is checked to see if it has
 changed size.
 Historical implementations of @command{tail} have required that
 @var{number} be an integer.  However, GNU @command{tail} accepts
-an arbitrary floating point number (using a period before any
-fractional digits).
+an arbitrary floating point number.  @xref{Floating point}.
 When @command{tail} uses inotify, this polling-related option is ignored.
 
 @itemx --pid=@var{pid}
@@ -3883,11 +3912,8 @@ the final result, after the throwing away.))
 @opindex --sort
 @cindex general numeric sort
 @vindex LC_NUMERIC
-Sort numerically, using the standard C function @code{strtold} to convert
-a prefix of each line to a long double-precision floating point number.
-This allows floating point numbers to be specified in scientific notation,
-like @code{1.0e-34} and @code{10e100}.
-The @env{LC_NUMERIC} locale determines the decimal-point character.
+Sort numerically, converting a prefix of each line to a long
+double-precision floating point number.  @xref{Floating point}.
 Do not report overflow, underflow, or conversion errors.
 Use the following collating sequence:
 
@@ -4761,11 +4787,17 @@ If there is an error it exits with nonzero status.
 @macro checkOrderOption{cmd}
 If the @option{--check-order} option is given, unsorted inputs will
 cause a fatal error message.  If the option @option{--nocheck-order}
-is given, unsorted inputs will never cause an error message.  If
-neither of these options is given, wrongly sorted inputs are diagnosed
-only if an input file is found to contain unpairable lines.  If an
-input file is diagnosed as being unsorted, the @command{\cmd\} command
-will exit with a nonzero status (and the output should not be used).
+is given, unsorted inputs will never cause an error message.  If neither
+of these options is given, wrongly sorted inputs are diagnosed
+only if an input file is found to contain unpairable
+@ifset JOIN_COMMAND
+lines, and when both input files are non empty.
+@end ifset
+@ifclear JOIN_COMMAND
+lines.
+@end ifclear
+If an input file is diagnosed as being unsorted, the @command{\cmd\}
+command will exit with a nonzero status (and the output should not be used).
 
 Forcing @command{\cmd\} to process wrongly sorted input files
 containing unpairable lines by specifying @option{--nocheck-order} is
@@ -5474,11 +5506,26 @@ Select for printing only the fields listed in @var{field-list}.
 Fields are separated by a TAB character by default.  Also print any
 line that contains no delimiter character, unless the
 @option{--only-delimited} (@option{-s}) option is specified.
-Note @command{cut} does not support specifying runs of whitespace as a
-delimiter, so to achieve that common functionality one can pre-process
-with @command{tr} like:
+
+Note @command{awk} supports more sophisticated field processing,
+and by default will use (and discard) runs of blank characters to
+separate fields, and ignore leading and trailing blanks.
 @example
-tr -s '[:blank:]' '\t' | cut -f@dots{}
+@verbatim
+awk '{print $2}'    # print the second field
+awk '{print $NF-1}' # print the penultimate field
+awk '{print $2,$1}' # reorder the first two fields
+@end verbatim
+@end example
+
+In the unlikely event that @command{awk} is unavailable,
+one can use the @command{join} command, to process blank
+characters as @command{awk} does above.
+@example
+@verbatim
+join -a1 -o 1.2     - /dev/null # print the second field
+join -a1 -o 1.2,1.1 - /dev/null # reorder the first two fields
+@end verbatim
 @end example
 
 @item -d @var{input_delim_byte}
@@ -5646,7 +5693,9 @@ c c1 c2
 b b1 b2
 @end example
 
+@set JOIN_COMMAND
 @checkOrderOption{join}
+@clear JOIN_COMMAND
 
 The defaults are:
 @itemize
@@ -5675,8 +5724,8 @@ Do not check that both input files are in sorted order.  This is the default.
 
 @item -e @var{string}
 @opindex -e
-Replace those output fields that are missing in the input with
-@var{string}.
+Replace those output fields that are missing in the input with @var{string}.
+I.E. missing fields specified with the @option{-12jo} options.
 
 @item --header
 @opindex --header
@@ -5707,10 +5756,17 @@ Join on field @var{field} (a positive integer) of file 2.
 Equivalent to @option{-1 @var{field} -2 @var{field}}.
 
 @item -o @var{field-list}
-Construct each output line according to the format in @var{field-list}.
-Each element in @var{field-list} is either the single character @samp{0} or
-has the form @var{m.n} where the file number, @var{m}, is @samp{1} or
-@samp{2} and @var{n} is a positive field number.
+@itemx -o auto
+If the keyword @samp{auto} is specified, infer the output format from
+the first line in each file.  This is the same as the default output format
+but also ensures the same number of fields are output for each line.
+Missing fields are replaced with the @option{-e} option and extra fields
+are discarded.
+
+Otherwise, construct each output line according to the format in
+@var{field-list}.  Each element in @var{field-list} is either the single
+character @samp{0} or has the form @var{m.n} where the file number, @var{m},
+is @samp{1} or @samp{2} and @var{n} is a positive field number.
 
 A field specification of @samp{0} denotes the join field.
 In most cases, the functionality of the @samp{0} field spec
@@ -8892,6 +8948,20 @@ your hard disk, you could give a command like this:
 shred --verbose /dev/sda5
 @end example
 
+On modern disks, a single pass should be adequate,
+and it will take one third the time of the default three-pass approach.
+
+@example
+# 1 pass, write pseudo-random data; 3x faster than the default
+shred --verbose -n1 /dev/sda5
+@end example
+
+To be on the safe side, use at least one pass that overwrites using
+pseudo-random data.  I.e., don't be tempted to use @samp{-n0 --zero},
+in case some disk controller optimizes the process of writing blocks
+of all zeros, and thereby does not clear all bytes in a block.
+Some SSDs may do just that.
+
 A @var{file} of @samp{-} denotes standard output.
 The intended use of this is to shred a removed temporary file.
 For example:
@@ -11195,6 +11265,7 @@ digits, but is printed according to the @env{LC_NUMERIC} category of the
 current locale.  For example, in a locale whose radix character is a
 comma, the command @samp{printf %g 3.14} outputs @samp{3,14} whereas
 the command @samp{printf %g 3,14} is an error.
+@xref{Floating point}.
 
 @kindex \@var{ooo}
 @kindex \x@var{hh}
@@ -15650,8 +15721,7 @@ days
 Historical implementations of @command{sleep} have required that
 @var{number} be an integer, and only accepted a single argument
 without a suffix.  However, GNU @command{sleep} accepts
-arbitrary floating point numbers (using a period before any fractional
-digits).
+arbitrary floating point numbers.  @xref{Floating point}.
 
 The only options are @option{--help} and @option{--version}.  @xref{Common
 options}.
@@ -15751,8 +15821,7 @@ When @var{increment} is not specified, it defaults to @samp{1},
 even when @var{first} is larger than @var{last}.
 @var{first} also defaults to @samp{1}.  So @code{seq 1} prints
 @samp{1}, but @code{seq 0} and @code{seq 10 5} produce no output.
-Floating-point numbers
-may be specified (using a period before any fractional digits).
+Floating-point numbers may be specified.  @xref{Floating point}.
 
 The program accepts the following options.  Also see @ref{Common options}.
 Options must precede operands.
@@ -15829,7 +15898,8 @@ of @code{%x}.
 
 On most systems, seq can produce whole-number output for values up to
 at least @math{2^{53}}.  Larger integers are approximated.  The details
-differ depending on your floating-point implementation, but a common
+differ depending on your floating-point implementation.
+@xref{Floating point}.  A common
 case is that @command{seq} works with integers through @math{2^{64}},
 and larger integers may not be numerically correct:
 

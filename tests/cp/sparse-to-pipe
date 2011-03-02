@@ -1,8 +1,7 @@
 #!/bin/sh
-# Test cp backup.
+# copy a sparse file to a pipe, to exercise some seldom-used parts of copy.c
 
-# Copyright (C) 1997, 1999, 2002, 2004, 2006-2011 Free Software Foundation,
-# Inc.
+# Copyright (C) 2011 Free Software Foundation, Inc.
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -20,19 +19,17 @@
 . "${srcdir=.}/init.sh"; path_prepend_ ../src
 print_ver_ cp
 
-suffix=.b
-file=F
-file_backup="$file$suffix"
+require_sparse_support_
 
-echo test > $file || fail=1
+mkfifo_or_skip_ pipe
+timeout 10 cat pipe > copy &
 
-# Specify both version control and suffix so the environment variables
-# (possibly set by the user running these tests) aren't used.
-cp --force --backup=simple --suffix=$suffix $file $file || fail=1
-cp -T --force --backup=simple --suffix=$suffix $file $file || fail=1
+truncate -s1M sparse || framework_failure_
+cp sparse pipe || fail=1
 
-test -f $file || fail=1
-test -f $file_backup || fail=1
-compare $file $file_backup > /dev/null || fail=1
+# Ensure that the cat has completed before comparing.
+wait
+
+cmp sparse copy || fail=1
 
 Exit $fail
