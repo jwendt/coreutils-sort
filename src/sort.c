@@ -22,6 +22,7 @@
 
 #include <config.h>
 
+#include <float.h>
 #include <getopt.h>
 #include <pthread.h>
 #include <sys/types.h>
@@ -102,6 +103,11 @@ struct rlimit { size_t rlim_cur; };
 
 #ifndef DEFAULT_TMPDIR
 # define DEFAULT_TMPDIR "/tmp"
+#endif
+
+/* Endianness check for use in general_numeric_discriminator. */
+#ifndef WORDS_BIGENDIAN
+# define WORDS_BIGENDIAN 0
 #endif
 
 /* Maximum number of lines to merge every time a NODE is taken from
@@ -1724,20 +1730,19 @@ numeric_discriminator (uintmax_t *discrim, const char *data)
   else if (*data == '+')
     data++;
 
-  /* Leading zero's are okay */
   while (*data == '0' || *data == thousands_sep)
     data++;
 
-  /* Convert number to integer */
   while ((digit = ISDIGIT (*data)) || *data == thousands_sep)
     {
+      /* Convert number to integer */
       if (digit)
       {
         *discrim *= 10;
         *discrim += (*data - '0');
-        /* Overflow */
         if (*discrim > MAXIMUM)
           {
+            /* Overflow */
             *discrim = UINTMAX_MAX;
             goto done;
           }
@@ -1745,9 +1750,9 @@ numeric_discriminator (uintmax_t *discrim, const char *data)
       data++;
     }
 
-  /* Fraction conversion */
   if (*data == decimal_point)
     {
+      /* Fraction conversion */
       data++;
       for (i = 0; i < 2 && ISDIGIT (*data); i++)
         {
@@ -1768,11 +1773,11 @@ numeric_discriminator (uintmax_t *discrim, const char *data)
   if (!positive && *discrim != 0)
     {
       *discrim = ~(*discrim);
-      *discrim &= 0x7FFFFFFFFFFFFFFF;
+      *discrim &= UINTMAX_MAX/2;
     }
   else
     {
-      *discrim |= 0x8000000000000000;
+      *discrim |= UINTMAX_MAX/2 + 1;
     }
 
   return *discrim;
@@ -1806,21 +1811,20 @@ human_numeric_discriminator (uintmax_t *discrim, const char *data)
   else if (*data == '+')
     data++;
 
-  /* Leading zero's are okay */
   while (*data == '0' || *data == thousands_sep)
     data++;
 
-  /* Convert number to integer */
   while ((digit = ISDIGIT (*data)) || *data == thousands_sep)
     {
+      /* Convert number to integer */
       if (digit)
         {
           *discrim *= 10;
           *discrim += (*data -'0');
-          /* Overflow */
           if (*discrim > MAXIMUM)
             {
-              *discrim = 0x07FFFFFFFFFFFFFF;
+              /* Overflow */
+              *discrim = UINTMAX_MAX>>5;
               goto done;
             }
         }
@@ -1829,9 +1833,9 @@ human_numeric_discriminator (uintmax_t *discrim, const char *data)
 
   *discrim *= 10;
 
-  /* Fraction conversion */
   if (*data == decimal_point)
     {
+      /* Fraction conversion */
       data++;
       if (ISDIGIT (*data))
         *discrim += (*data - '0');
@@ -1839,9 +1843,9 @@ human_numeric_discriminator (uintmax_t *discrim, const char *data)
 
   done:
 
-  /* Handle overflow special cases */
-  if (*discrim == 0x07FFFFFFFFFFFFFF)
+  if (*discrim == UINTMAX_MAX>>5)
     {
+      /* Handle overflow special cases */
       if (*data != decimal_point)
         while (ISDIGIT (*data) || *data == thousands_sep)
           data++;
@@ -1850,9 +1854,9 @@ human_numeric_discriminator (uintmax_t *discrim, const char *data)
           data++;
       magnitude = unit_order[to_uchar (*data)];
     }
-  /* Set magnitude bits */
   else
     {
+      /* Set magnitude bits */
       ch = *data;
       if (*data == decimal_point)
         while (ISDIGIT (ch = *data++))
@@ -1871,11 +1875,11 @@ human_numeric_discriminator (uintmax_t *discrim, const char *data)
   if (!positive && *discrim != 0)
     {
       *discrim = ~(*discrim);
-      *discrim &= 0x7FFFFFFFFFFFFFFF;
+      *discrim &= UINTMAX_MAX/2;
     }
   else
     {
-      *discrim |= 0x8000000000000000;
+      *discrim |= UINTMAX_MAX/2 + 1;
     }
 
   return *discrim;
@@ -1890,39 +1894,82 @@ general_numeric_discriminator (uintmax_t *discrim, const char *data)
      the sign bit will be set to 1 for positive numbers, and negative numbers
      will have all of their bits flipped. */
   char *endptr;
+  double d;
 
-  /* Check for IEEE floating point support. */
-  #if defined __amd64__ || defined __x86_64__ || \
-      defined __i386__ || defined __ia64__
-  typedef double __attribute__((__may_alias__)) dbldiscrim;
-
-  dbldiscrim *dblp = (dbldiscrim*) discrim;
-
-  /* Get the value as a double from the string */
-  *dblp = strtod (data, &endptr);
-
-  /* Return 0 if strod does not perform a conversion */
-  if (data == endptr)
+  if ((WORDS_BIGENDIAN || sizeof (double) <= sizeof (uintmax_t))
+      && (FLT_RADIX == 2 && FLT_MANT_DIG == 24
+      && FLT_MIN_EXP == -125 && FLT_MAX_EXP == 128))
     {
-      *discrim = 0;
-      return 0;
+      /* On a Big Endian machine, if the size of a double and the size of
+         a uintmax_t differ, the conversion between the two representations
+         will work fine.  On a Little Endian machine, conversion will only
+         work when sizeof double <= sizeof uintmax_t.  Additionally, check
+         for IEEE floating point support. */
+      uintmax_t bitflip;
+      if (sizeof (uintmax_t) < 64)
+        bitflip = UINTMAX_MAX/2 + 1;
+      else
+        bitflip = 0x8000000000000000;
+
+      union
+      {
+        double d;
+        uintmax_t uim;
+      }
+      dbldiscrim;
+
+      /* On a Big Endian machine, if the size of a uintmax_t
+         is larger than the size of a double, the trailing bits
+         need to be set to zero to ensure correct conversion. */
+      dbldiscrim.uim = 0;
+
+      /* Get the value as a double from the string */
+      dbldiscrim.d = strtod (data, &endptr);
+      dbldiscrim.d = dbldiscrim.d ? dbldiscrim.d : 0;
+      *discrim = dbldiscrim.uim;
+
+      if (*discrim & bitflip)
+        {
+          /* If negative, flip every bit. */
+          *discrim = ~(*discrim);
+        }
+      else
+        {
+          /* Otherwise, flip only ths sign bit */
+          *discrim ^= bitflip;
+        }
+    }
+  else
+    {
+      /* No IEEE floating point, so use simple conversion to
+         integer representation. */
+      d = strtod (data, &endptr);
+      if ((d < 0 ? -d : d) < UINTMAX_MAX/2)
+        {
+          /* If the double is within representable range */
+          if (d < 0)
+            {
+              *discrim = (uintmax_t) -d;
+              *discrim = ~(*discrim);
+              *discrim &= UINTMAX_MAX/2;
+            }
+          else
+            {
+              *discrim = (uintmax_t) d;
+              *discrim |= (UINTMAX_MAX/2 + 1);
+            }
+        }
+      else
+        {
+          /* Double is too large to represent, set to max or
+             min value */
+          if (d < 0)
+            *discrim = 0;
+          else
+            *discrim = UINTMAX_MAX;
+        }
     }
 
-  if (*discrim == 0x8000000000000000)
-    *discrim &= 0x7FFFFFFFFFFFFFFF;
-
-  /* If negative, flip every bit, otherwise, set the sign bit.
-     If positive flip only the sign bit.  */
-  if ((*discrim >> 63) == 1)
-    *discrim = ~(*discrim);
-  else
-    *discrim ^= 0x8000000000000000;
-
-  /* No IEEE floating point */
-  #else
-  *discrim = (uintmax_t) strtod (data, &endptr);
-
-  #endif
   return *discrim;
 }
 
