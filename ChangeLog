@@ -1,3 +1,10 @@
+2011-3-3 Drew Kutilek <dkutilek@ucla.edu>
+	* src/sort.c (LINES_BIGENDIAN): New preprocessor macro, for endianness
+	check. 
+	(general_numeric_discriminator): GNU formatting
+	(numeric_discriminator): GNU formatting
+	(human_numeric_discriminator): GNU formatting
+
 2011-2-25 James Wendt <jwendt@cs.ucla.edu>
 	* src/sort.c (general_numeric_discriminator): Removed duplicate
 	declaration.
