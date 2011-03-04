@@ -10,6 +10,8 @@ EXTRA_DIST =		\
   CuTmpdir.pm		\
   check.mk		\
   envvar-check		\
+  filefrag-extent-compare \
+  fiemap-capable	\
   init.cfg		\
   init.sh		\
   lang-default		\
@@ -25,6 +27,7 @@ root_tests =					\
   cp/special-bits				\
   cp/cp-mv-enotsup-xattr			\
   cp/capability					\
+  cp/sparse-fiemap				\
   dd/skip-seek-past-dev				\
   install/install-C-root			\
   ls/capability					\
@@ -287,6 +290,7 @@ TESTS =						\
   misc/tty-eof					\
   misc/unexpand					\
   misc/uniq					\
+  misc/uniq-perf				\
   misc/xattr					\
   tail-2/wait					\
   chmod/c-option				\
@@ -318,6 +322,8 @@ TESTS =						\
   cp/dir-vs-file				\
   cp/existing-perm-race				\
   cp/fail-perm					\
+  cp/fiemap-perf				\
+  cp/fiemap-2					\
   cp/file-perm-race				\
   cp/into-self					\
   cp/link					\
@@ -339,6 +345,7 @@ TESTS =						\
   cp/same-file					\
   cp/slink-2-slink				\
   cp/sparse					\
+  cp/sparse-to-pipe				\
   cp/special-f					\
   cp/src-base-dot				\
   cp/symlink-slash				\

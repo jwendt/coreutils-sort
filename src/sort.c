@@ -105,6 +105,11 @@ struct rlimit { size_t rlim_cur; };
 # define DEFAULT_TMPDIR "/tmp"
 #endif
 
+/* Endianness check for use in general_numeric_discriminator. */
+#ifndef WORDS_BIGENDIAN
+# define WORDS_BIGENDIAN 0
+#endif
+
 /* Maximum number of lines to merge every time a NODE is taken from
    the merge queue.  Node is at LEVEL in the binary merge tree,
    and is responsible for merging TOTAL lines. */
@@ -1773,11 +1778,11 @@ numeric_discriminator (uintmax_t *discrim, const char *data)
   if (!positive && *discrim != 0)
     {
       *discrim = ~(*discrim);
-      *discrim &= 0x7FFFFFFFFFFFFFFF;
+      *discrim &= UINTMAX_MAX/2;
     }
   else
     {
-      *discrim |= 0x8000000000000000;
+      *discrim |= UINTMAX_MAX/2 + 1;
     }
 
   return *discrim;
@@ -1824,7 +1829,7 @@ human_numeric_discriminator (uintmax_t *discrim, const char *data)
           if (*discrim > MAXIMUM)
             {
               /* Overflow */
-              *discrim = 0x07FFFFFFFFFFFFFF;
+              *discrim = UINTMAX_MAX>>5;
               goto done;
             }
         }
@@ -1843,7 +1848,7 @@ human_numeric_discriminator (uintmax_t *discrim, const char *data)
 
   done:
 
-  if (*discrim == 0x07FFFFFFFFFFFFFF)
+  if (*discrim == UINTMAX_MAX>>5)
     {
       /* Handle overflow special cases */
       if (*data != decimal_point)
@@ -1875,11 +1880,11 @@ human_numeric_discriminator (uintmax_t *discrim, const char *data)
   if (!positive && *discrim != 0)
     {
       *discrim = ~(*discrim);
-      *discrim &= 0x7FFFFFFFFFFFFFFF;
+      *discrim &= UINTMAX_MAX/2;
     }
   else
     {
-      *discrim |= 0x8000000000000000;
+      *discrim |= UINTMAX_MAX/2 + 1;
     }
 
   return *discrim;
@@ -1894,6 +1899,7 @@ general_numeric_discriminator (uintmax_t *discrim, const char *data)
      the sign bit will be set to 1 for positive numbers, and negative numbers
      will have all of their bits flipped. */
   char *endptr;
+  double d;
 
   if ((WORDS_BIGENDIAN || sizeof (double) <= sizeof (uintmax_t))
       && (FLT_RADIX == 2 && FLT_MANT_DIG == 24
@@ -1904,6 +1910,11 @@ general_numeric_discriminator (uintmax_t *discrim, const char *data)
          will work fine.  On a Little Endian machine, conversion will only
          work when sizeof double <= sizeof uintmax_t.  Additionally, check
          for IEEE floating point support. */
+      uintmax_t bitflip;
+      if (sizeof (uintmax_t) < 64)
+        bitflip = UINTMAX_MAX/2 + 1;
+      else
+        bitflip = 0x8000000000000000;
 
       union
       {
@@ -1919,18 +1930,10 @@ general_numeric_discriminator (uintmax_t *discrim, const char *data)
 
       /* Get the value as a double from the string */
       dbldiscrim.d = strtod (data, &endptr);
+      dbldiscrim.d = dbldiscrim.d ? dbldiscrim.d : 0;
       *discrim = dbldiscrim.uim;
 
-      if (data == endptr)
-        {
-          *discrim = 0;
-          return 0;
-        }
-
-      if (*discrim == 0x8000000000000000)
-        *discrim &= 0x7FFFFFFFFFFFFFFF;
-
-      if ((*discrim >> 63) == 1)
+      if (*discrim & bitflip)
         {
           /* If negative, flip every bit. */
           *discrim = ~(*discrim);
@@ -1938,14 +1941,38 @@ general_numeric_discriminator (uintmax_t *discrim, const char *data)
       else
         {
           /* Otherwise, flip only ths sign bit */
-          *discrim ^= 0x8000000000000000;
+          *discrim ^= bitflip;
         }
     }
   else
     {
       /* No IEEE floating point, so use simple conversion to
          integer representation. */
-      *discrim = (uintmax_t) strtod (data, &endptr);
+      d = strtod (data, &endptr);
+      if ((d < 0 ? -d : d) < UINTMAX_MAX/2)
+        {
+          /* If the double is within representable range */
+          if (d < 0)
+            {
+              *discrim = (uintmax_t) -d;
+              *discrim = ~(*discrim);
+              *discrim &= UINTMAX_MAX/2;
+            }
+          else
+            {
+              *discrim = (uintmax_t) d;
+              *discrim |= (UINTMAX_MAX/2 + 1);
+            }
+        }
+      else
+        {
+          /* Double is too large to represent, set to max or
+             min value */
+          if (d < 0)
+            *discrim = 0;
+          else
+            *discrim = UINTMAX_MAX;
+        }
     }
 
   return *discrim;
@@ -3538,28 +3565,16 @@ sequential_sort (struct line *restrict lines, size_t nlines,
 }
 
 
-/* FIXME: return this struct from mergelines_lists() and sequential_sort_lists()
-   Allows for returning front and back pointers to sorted linked list */
-struct sorted_ends
-{
-    struct line *start;
-    struct line *end;
-};
-
-
-/* Merge in place the sorted linked lists lo_line and hi_line */
+/* Merge in place the sorted linked lists lo_line and hi_line. Lines are
+** guarenteed to end with the empty_line address */
 struct line *
-mergelines_lists (struct line * lo_line, size_t nlo,
-                  struct line * hi_line, size_t nhi){
+mergelines_lists (struct line *lo_line, struct line *hi_line, struct line *empty_line){
 
     struct line *top;
     struct line *bottom;
     bool first = true;
 
-    size_t lo_counter = 0;
-    size_t hi_counter = 0;
-
-    while (lo_counter < nlo && hi_counter < nhi)
+    while( lo_line != empty_line && hi_line != empty_line )
       {
         if (compare (lo_line, hi_line) <= 0)
           {
@@ -3575,7 +3590,6 @@ mergelines_lists (struct line * lo_line, size_t nlo,
                 bottom = bottom->next;
               }
             lo_line = lo_line->next;
-            lo_counter++;
           }
         else
           {
@@ -3591,27 +3605,28 @@ mergelines_lists (struct line * lo_line, size_t nlo,
                 bottom = bottom->next;
               }
             hi_line = hi_line->next;
-            hi_counter++;
           }
       }
 
-    if (lo_counter == nlo)
+    if (lo_line == empty_line)
       bottom->next = hi_line;
-    else if (hi_counter == nhi)
+    else if (hi_line == empty_line)
       bottom->next = lo_line;
 
     return top;
 }
 
 
-/* FIXME: return value should be a tuple: head and tail of sorted linked list. */
 /* Merge sort lines using one thread. Returned value is the head of the sorted
-   linked list. */
+   linked list. Guarenteed to assign tail of linked list address of empty_line */
 struct line *
-sequential_sort_lists (struct line * lines, size_t nlines)
+sequential_sort_lists (struct line *lines, size_t nlines, struct line *empty_line)
 {
     if (nlines == 1)
-      return lines;
+      {
+        lines->next = empty_line;
+        return lines;
+      }
 
     size_t nlo = nlines/2;
     size_t nhi = nlines - nlo;
@@ -3620,13 +3635,13 @@ sequential_sort_lists (struct line * lines, size_t nlines)
     struct line *hi_line = lines - nlo;
 
     /* sort each half */
-    if (nlo > 1)
-        lo_line = sequential_sort_lists(lo_line, nlo);
-    if (nhi > 1)
-        hi_line = sequential_sort_lists(hi_line, nhi);
+    if (nlo > 0)
+        lo_line = sequential_sort_lists(lo_line, nlo, empty_line);
+    if (nhi > 0)
+        hi_line = sequential_sort_lists(hi_line, nhi, empty_line);
 
     /* merge the sorted lists */
-    lo_line = mergelines_lists(lo_line, nlo, hi_line, nhi);
+    lo_line = mergelines_lists(lo_line, hi_line, empty_line);
 
     return lo_line;
 }
@@ -3833,6 +3848,12 @@ mergelines_node (struct merge_node *restrict node, size_t total_lines,
   size_t to_merge = MAX_MERGE (total_lines, node->level);
   size_t merged_lo;
   size_t merged_hi;
+
+  /* FIXME: Implement linked list implementation by replacing:
+        `--dest' with `dest = dest->next'
+        `--node->lo' with `node->lo = node->lo->next'
+     Also, keep count of merged_lo and merged_hi since we can no longer
+     compute these values by measuring array separation. */
 
   if (node->level > MERGE_ROOT)
     {
@@ -4048,34 +4069,41 @@ sortlines (struct line *restrict lines, size_t nthreads,
     }
   else
     {
-      /* FIXME: do away with sequential_sort entirely */
       /* Nthreads = 1, this is a leaf NODE, or pthread_create failed.
          Sort with 1 thread. */
       size_t nlo = node->nlo;
       size_t nhi = node->nhi;
+      
+      /* FIXME: delete the 5 lines below that sorts using log P memory*/
       struct line *temp = lines - total_lines;
       if (1 < nhi)
         sequential_sort (lines - nlo, nhi, temp - nlo / 2, false);
       if (1 < nlo)
         sequential_sort (lines, nlo, temp, false);
 
-        /* Nthreads = 1, this is a leaf NODE, or pthread_create failed.
-         Sort with 1 thread. */
-      struct line * lo_line;
+      /* sort using linked lists */
+      struct line *lo_line;
+      struct line *hi_line;
+      struct line empty_line;
       if (1 < nlo)
-        lo_line = sequential_sort_lists(lines - 1, nlo);
+        lo_line = sequential_sort_lists(lines - 1, nlo, &empty_line);
       else
-        lo_line  = lines-1;
+        {
+          lo_line  = lines-1;
+          lo_line->next = &empty_line;
+        }
 
-      struct line * hi_line;
       if (1 < nhi)
-        hi_line = sequential_sort_lists(lines - nlo - 1, nhi);
+        hi_line = sequential_sort_lists(lines - nlo - 1, nhi, &empty_line);
       else
-        hi_line = lines - nlo - 1;
+        {
+          hi_line = lines - nlo - 1;
+          hi_line->next = &empty_line;
+        }
 
-      /* FIXME: must obtain node->end_lo and node->end_hi from
-         sequental_sort(). node->lo and node->hi should be set to lo_line and
-         hi_line respectivaly */
+      /* FIXME: node->lo should point to lo_line, node->hi should point to
+         hi_line, and and node->end_* should point to &empty_line for linked
+         list implementation. */
       /* Update merge NODE. No need to lock yet. */
       node->lo = lines;
       node->hi = lines - nlo;

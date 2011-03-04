@@ -1,8 +1,7 @@
 #!/bin/sh
-# Test cp backup.
+# before coreutils-8.10, seq 100000|uniq -f 10000000000 would run for days
 
-# Copyright (C) 1997, 1999, 2002, 2004, 2006-2011 Free Software Foundation,
-# Inc.
+# Copyright (C) 2011 Free Software Foundation, Inc.
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,21 +17,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 . "${srcdir=.}/init.sh"; path_prepend_ ../src
-print_ver_ cp
+print_ver_ uniq
 
-suffix=.b
-file=F
-file_backup="$file$suffix"
-
-echo test > $file || fail=1
-
-# Specify both version control and suffix so the environment variables
-# (possibly set by the user running these tests) aren't used.
-cp --force --backup=simple --suffix=$suffix $file $file || fail=1
-cp -T --force --backup=simple --suffix=$suffix $file $file || fail=1
-
-test -f $file || fail=1
-test -f $file_backup || fail=1
-compare $file $file_backup > /dev/null || fail=1
+seq 100 > in || fail=1
+timeout 1 uniq -f 10000000000 in || fail=1
 
 Exit $fail

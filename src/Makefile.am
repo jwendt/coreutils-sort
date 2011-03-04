@@ -145,6 +145,7 @@ noinst_HEADERS =	\
   copy.h		\
   cp-hash.h		\
   dircolors.h		\
+  fiemap.h		\
   find-mount-point.h	\
   fs.h			\
   group-list.h		\
@@ -449,7 +450,7 @@ uninstall-local:
 	  fi; \
 	fi
 
-copy_sources = copy.c cp-hash.c
+copy_sources = copy.c cp-hash.c extent-scan.c extent-scan.h
 
 # Use `ginstall' in the definition of PROGRAMS and in dependencies to avoid
 # confusion with the `install' target.  The install rule transforms `ginstall'

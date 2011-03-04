@@ -1,6 +1,24 @@
-2011-2-23 Drew Kutilek <dkutilek@ucla.edu>
+2011-3-3 Drew Kutilek <dkutilek@ucla.edu>
 	* test-case-generators: organized test scripts and added scripts for
 	stage 2.
+
+2011-3-3 Drew Kutilek <dkutilek@ucla.edu>
+	* src/sort.c (LINES_BIGENDIAN): New preprocessor macro, for endianness
+	check. 
+	(general_numeric_discriminator): GNU formatting
+	(numeric_discriminator): GNU formatting
+	(human_numeric_discriminator): GNU formatting
+
+2011-2-25 James Wendt <jwendt@cs.ucla.edu>
+	* src/sort.c (general_numeric_discriminator): Removed duplicate
+	declaration.
+	* src/sort.c (struct sorted_ends): Struct not necessary, removed.
+	* src/sort.c (sequential_sort_lists): Now returns pointer to top of sorted
+	list and guarentees end of linked list points to &empty_line.
+	* src/sort.c (mergelines_list): While loop condition now checks if line is
+	not equal to empty_line instead of updating a counter after each iteration.
+	* src/sort.c (sortlines): Properly assigns single element lists the
+	empty_line as the next line.
 
 2011-2-23 Drew Kutilek <dkutilek@ucla.edu>
 	* src/sort.c (*_discriminator): fixed formatting to meet GNU standards

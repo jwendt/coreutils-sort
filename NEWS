@@ -4,14 +4,50 @@ GNU coreutils NEWS                                    -*- outline -*-
 
 ** Bug fixes
 
+  cut could segfault when invoked with a user-specified output
+  delimiter and an unbounded range like "-f1234567890-".
+  [bug introduced in coreutils-5.3.0]
+
+
+* Noteworthy changes in release 8.10 (2011-02-04) [stable]
+
+** Bug fixes
+
   du would abort with a failed assertion when two conditions are met:
   part of the hierarchy being traversed is moved to a higher level in the
   directory tree, and there is at least one more command line directory
   argument following the one containing the moved sub-tree.
   [bug introduced in coreutils-5.1.0]
 
+  join --header now skips the ordering check for the first line
+  even if the other file is empty.  [bug introduced in coreutils-8.5]
+
   rm -f no longer fails for EINVAL or EILSEQ on file systems that
   reject file names invalid for that file system.
+
+  uniq -f NUM no longer tries to process fields after end of line.
+  [bug introduced in coreutils-7.0]
+
+** New features
+
+  cp now copies sparse files efficiently on file systems with FIEMAP
+  support (ext4, btrfs, xfs, ocfs2).  Before, it had to read 2^20 bytes
+  when copying a 1MiB sparse file.  Now, it copies bytes only for the
+  non-sparse sections of a file.  Similarly, to induce a hole in the
+  output file, it had to detect a long sequence of zero bytes.  Now,
+  it knows precisely where each hole in an input file is, and can
+  reproduce them efficiently in the output file.  mv also benefits
+  when it resorts to copying, e.g., between file systems.
+
+  join now supports -o 'auto' which will automatically infer the
+  output format from the first line in each file, to ensure
+  the same number of fields are output for each line.
+
+** Changes in behavior
+
+  join no longer reports disorder when one of the files is empty.
+  This allows one to use join as a field extractor like:
+  join -a1 -o 1.3,1.1 - /dev/null
 
 
 * Noteworthy changes in release 8.9 (2011-01-04) [stable]
