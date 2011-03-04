@@ -14,11 +14,17 @@ If you have any difficulty with dependencies while building, refer to the
 clones coreutils folder.
 
 To build the generators, simply use the "make" command inside 
-"coreutils-sort/test-case-generators". 
+"coreutils-sort/test-case-generators/generators". 
 "general_numeric_generator" will have warnings on build, ignore them.
 
-To run these tests, use the run_*_test.sh scripts.  They expect an argument
-of how many lines to produce to be piped to the sort benchmark.  All output
+To run stage 1 tests, use the run_*_test.sh scripts in the stage1 directory.
+They expect an argument of how many lines to produce to be piped to the sort
+benchmark.  All output is redirected to "/dev/null" because of the storage
+limitations on the seasnet servers.
+
+To run stage 2 tests, use the run_*_test.sh scripts in the stage2 directory.
+They expect an argument of how many lines to produce to be piped to the sort
+benchmark, and the size of the sort buffer in units of 1024 bytes.  All output
 is redirected to "/dev/null" because of the storage limitations on the
 seasnet servers.
 
