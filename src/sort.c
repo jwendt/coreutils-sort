@@ -257,6 +257,11 @@ struct merge_node
   unsigned int level;           /* Level in merge tree. */
   bool queued;                  /* Node is already in heap. */
   pthread_mutex_t lock;         /* Lock for node operations. */
+
+  struct line *head;
+  struct line *tail;
+  bool complete;
+  pthread_mutex_t datalock;
 };
 
 /* Priority queue of merge nodes. */
@@ -3568,67 +3573,67 @@ sequential_sort (struct line *restrict lines, size_t nlines,
 /* Merge in place the sorted linked lists lo_line and hi_line. Lines are
 ** guarenteed to end with the empty_line address */
 struct line *
-mergelines_lists (struct line *lo_line, struct line *hi_line, struct line *empty_line){
+mergelines_lists (struct line *lo_line, struct line *hi_line)
+{
 
     struct line *top;
     struct line *bottom;
     bool first = true;
 
-    while( lo_line != empty_line && hi_line != empty_line )
-      {
-        if (compare (lo_line, hi_line) <= 0)
-          {
-            if (first)
-              {
-                top = lo_line;
-                bottom = lo_line;
-                first = false;
-              }
-            else
-              {
-                bottom->next = lo_line;
-                bottom = bottom->next;
-              }
-            lo_line = lo_line->next;
-          }
-        else
-          {
-            if (first)
-              {
-                top = hi_line;
-                bottom = hi_line;
-                first = false;
-              }
-            else
-              {
-                bottom->next = hi_line;
-                bottom = bottom->next;
-              }
-            hi_line = hi_line->next;
-          }
-      }
+  while (lo_line != NULL && hi_line != NULL)
+    {
+      if (compare (lo_line, hi_line) <= 0)
+        {
+          if (first)
+            {
+              top = lo_line;
+              bottom = lo_line;
+              first = false;
+            }
+          else
+            {
+              bottom->next = lo_line;
+              bottom = bottom->next;
+            }
+          lo_line = lo_line->next;
+        }
+      else
+        {
+          if (first)
+            {
+              top = hi_line;
+              bottom = hi_line;
+              first = false;
+            }
+          else
+            {
+              bottom->next = hi_line;
+              bottom = bottom->next;
+            }
+          hi_line = hi_line->next;
+        }
+    }
 
-    if (lo_line == empty_line)
-      bottom->next = hi_line;
-    else if (hi_line == empty_line)
-      bottom->next = lo_line;
+  if (lo_line == NULL)
+    bottom->next = hi_line;
+  else if (hi_line == NULL)
+    bottom->next = lo_line;
 
     return top;
 }
 
-
 /* Merge sort lines using one thread. Returned value is the head of the sorted
    linked list. Guarenteed to assign tail of linked list address of empty_line */
 struct line *
-sequential_sort_lists (struct line *lines, size_t nlines, struct line *empty_line)
+sequential_sort_lists (struct line *lines, size_t nlines)
 {
     if (nlines == 1)
       {
-        lines->next = empty_line;
+        lines->next = NULL;
         return lines;
       }
 
-    size_t nlo = nlines/2;
+    size_t nlo = nlines / 2;
     size_t nhi = nlines - nlo;
 
     struct line *lo_line = lines;
@@ -3636,12 +3641,12 @@ sequential_sort_lists (struct line *lines, size_t nlines, struct line *empty_lin
 
     /* sort each half */
     if (nlo > 0)
-        lo_line = sequential_sort_lists(lo_line, nlo, empty_line);
+      lo_line = sequential_sort_lists (lo_line, nlo);
     if (nhi > 0)
-        hi_line = sequential_sort_lists(hi_line, nhi, empty_line);
+      hi_line = sequential_sort_lists (hi_line, nhi);
 
     /* merge the sorted lists */
-    lo_line = mergelines_lists(lo_line, hi_line, empty_line);
+    lo_line = mergelines_lists (lo_line, hi_line);
 
     return lo_line;
 }
@@ -3650,7 +3655,6 @@ sequential_sort_lists (struct line *lines, size_t nlines, struct line *empty_lin
 static struct merge_node *init_node (struct merge_node *restrict,
                                      struct merge_node *restrict,
                                      struct line *, size_t, size_t, bool);
-
 
 /* Create and return a merge tree for NTHREADS threads, sorting NLINES
    lines, with destination DEST.  */
@@ -3667,6 +3671,11 @@ merge_tree_init (size_t nthreads, size_t nlines, struct line *dest)
   root->level = MERGE_END;
   root->queued = false;
   pthread_mutex_init (&root->lock, NULL);
+
+  root->head = NULL;
+  root->tail = NULL;
+  root->complete = false;
+  pthread_mutex_init (&root->datalock, NULL);
 
   init_node (root, root + 1, dest, nthreads, nlines, false);
   return merge_tree;
@@ -3710,6 +3719,11 @@ init_node (struct merge_node *restrict parent,
   node->queued = false;
   pthread_mutex_init (&node->lock, NULL);
 
+  node->head = NULL;
+  node->tail = NULL;
+  node->complete = false;
+  pthread_mutex_init (&node->datalock, NULL);
+
   if (nthreads > 1)
     {
       size_t lo_threads = nthreads / 2;
@@ -3728,7 +3742,6 @@ init_node (struct merge_node *restrict parent,
     }
   return node_pool;
 }
-
 
 /* Compare two merge nodes A and B for priority.  */
 
@@ -3832,6 +3845,73 @@ write_unique (struct line const *line, FILE *tfp, char const *temp_output)
   write_line (line, tfp, temp_output);
 }
 
+// mergelines_node assist funcs
+
+inline bool
+has_avail (struct merge_node * n)
+{
+  return n->head != NULL;
+}
+
+static void
+grow_list_using_child_node (struct merge_node* node, struct merge_node* child, bool output, FILE* tfp, char const *temp_output)
+{
+  if (!child->complete)
+    pthread_mutex_lock (&child->datalock);
+  pthread_mutex_lock (&node->datalock);
+
+  // pop the head from the child
+  struct line* t = child->head;
+
+  // if there's only one element in the list, the list becomes empty list after popping the head
+  if (child->head == child->tail)
+    {
+      child->head = NULL;
+      child->tail = NULL;
+    }
+  else
+    {
+      child->head = child->head->next;
+    }
+
+  // grow the parent list with the item from child
+  if (node->tail)
+    node->tail->next = t;
+  node->tail = t;
+
+  if (!node->head)
+    node->head = t;
+
+  if (output)
+    write_unique (t, tfp, temp_output);
+
+  if (!child->complete)
+    pthread_mutex_unlock (&child->datalock);
+  pthread_mutex_unlock (&node->datalock);
+}
+
+static void
+grow_list_leaf_node (struct merge_node* node, struct line** target, bool output, FILE* tfp, char const *temp_output)
+{
+  pthread_mutex_lock (&node->datalock);
+
+  struct line* t = *target;
+
+  if (node->tail)
+    node->tail->next = t;
+  node->tail = t;
+
+  if (!node->head)
+    node->head = t;
+
+  *target = t->next;
+
+  if (output)
+    write_unique (t, tfp, temp_output);
+
+  pthread_mutex_unlock (&node->datalock);
+}
+
 /* Merge the lines currently available to a NODE in the binary
    merge tree.  Merge a number of lines appropriate for this merge
    level, assuming TOTAL_LINES is the total number of lines.
@@ -3839,74 +3919,119 @@ write_unique (struct line const *line, FILE *tfp, char const *temp_output)
    If merging at the top level, send output to TFP.  TEMP_OUTPUT is
    the name of TFP, or is null if TFP is standard output.  */
 
+#define GROW_LIST_LEAF(T) grow_list_leaf_node(node, &(T), output, tfp, temp_output)
+#define GROW_LIST_CHILD(T) grow_list_using_child_node(node, T, output, tfp, temp_output)
+
 static void
 mergelines_node (struct merge_node *restrict node, size_t total_lines,
                  FILE *tfp, char const *temp_output)
 {
-  struct line *lo_orig = node->lo;
-  struct line *hi_orig = node->hi;
   size_t to_merge = MAX_MERGE (total_lines, node->level);
-  size_t merged_lo;
-  size_t merged_hi;
 
-  /* FIXME: Implement linked list implementation by replacing:
-        `--dest' with `dest = dest->next'
-        `--node->lo' with `node->lo = node->lo->next'
-     Also, keep count of merged_lo and merged_hi since we can no longer
-     compute these values by measuring array separation. */
+  bool output = (node->level > MERGE_ROOT) ? false : true;
 
-  if (node->level > MERGE_ROOT)
+  while (to_merge > 0)
     {
-      /* Merge to destination buffer. */
-      struct line *dest = *node->dest;
-      while (node->lo != node->end_lo && node->hi != node->end_hi && to_merge--)
-        if (compare (node->lo - 1, node->hi - 1) <= 0)
-          *--dest = *--node->lo;
-        else
-          *--dest = *--node->hi;
+      to_merge--;
 
-      merged_lo = lo_orig - node->lo;
-      merged_hi = hi_orig - node->hi;
+      // leaf node (no children)
+      if (node->lo_child == NULL && node->hi_child == NULL)
+        {
+          if (node->lo && node->hi)
+            {
+              if (compare (node->lo, node->hi) <= 0)
+                {
+                  GROW_LIST_LEAF (node->lo);
+                }
+              else
+                {
+                  GROW_LIST_LEAF (node->hi);
+                }
+            }
+          else if (node->lo)
+            {
+              GROW_LIST_LEAF (node->lo);
+            }
+          else if (node->hi)
+            {
+              GROW_LIST_LEAF (node->hi);
+            }
 
-      if (node->nhi == merged_hi)
-        while (node->lo != node->end_lo && to_merge--)
-          *--dest = *--node->lo;
-      else if (node->nlo == merged_lo)
-        while (node->hi != node->end_hi && to_merge--)
-          *--dest = *--node->hi;
-      *node->dest = dest;
+          // if both lo and hi are null, it means we've merged everything available, so this node is complete
+          if (node->lo == NULL && node->hi == NULL)
+            {
+              node->complete = true;
+              break;
+            }
+        }
+        // has both children
+      else if (node->lo_child && node->hi_child)
+        {
+          if (has_avail (node->lo_child) && has_avail (node->hi_child))
+            {
+              if (compare (node->lo_child->head, node->hi_child->head) <= 0)
+                {
+                  GROW_LIST_CHILD (node->lo_child);
+                }
+              else
+                {
+                  GROW_LIST_CHILD (node->hi_child);
+                }
+            }
+          else if (has_avail (node->lo_child) && node->hi_child->complete)
+            {
+              GROW_LIST_CHILD (node->lo_child);
+            }
+          else if (has_avail (node->hi_child) && node->lo_child->complete)
+            {
+              GROW_LIST_CHILD (node->hi_child);
+            }
+
+          // if both children are complete, and lines are no longer available, then the parent is complete too
+          if (!has_avail (node->lo_child) && node->lo_child->complete && !has_avail (node->hi_child) && node->hi_child->complete)
+            {
+              node->complete = true;
+              break;
+            }
+        }
+        //only one child
+      else if (node->lo_child)
+        {
+          if (has_avail (node->lo_child))
+            {
+              GROW_LIST_CHILD (node->lo_child);
+            }
+
+          if (!has_avail (node->lo_child) && node->lo_child->complete)
+            {
+              node->complete = true;
+              break;
+            }
+        }
+      else if (node->hi_child)
+        {
+          if (has_avail (node->hi_child))
+            {
+              GROW_LIST_CHILD (node->hi_child);
+            }
+
+          if (!has_avail (node->hi_child) && node->hi_child->complete)
+            {
+              node->complete = true;
+              break;
+            }
+        }
     }
-  else
+
+  if (node->complete)
     {
-      /* Merge directly to output. */
-      while (node->lo != node->end_lo && node->hi != node->end_hi && to_merge--)
-        {
-          if (compare (node->lo - 1, node->hi - 1) <= 0)
-            write_unique (--node->lo, tfp, temp_output);
-          else
-            write_unique (--node->hi, tfp, temp_output);
-        }
-
-      merged_lo = lo_orig - node->lo;
-      merged_hi = hi_orig - node->hi;
-
-      if (node->nhi == merged_hi)
-        {
-          while (node->lo != node->end_lo && to_merge--)
-            write_unique (--node->lo, tfp, temp_output);
-        }
-      else if (node->nlo == merged_lo)
-        {
-          while (node->hi != node->end_hi && to_merge--)
-            write_unique (--node->hi, tfp, temp_output);
-        }
+      if (node->lo_child)
+        pthread_mutex_destroy (&node->lo_child->datalock);
+      if (node->hi_child)
+        pthread_mutex_destroy (&node->hi_child->datalock);
+      if (node->level <= MERGE_ROOT)
+        pthread_mutex_destroy (&node->datalock);
     }
-
-  /* Update NODE. */
-  merged_lo = lo_orig - node->lo;
-  merged_hi = hi_orig - node->hi;
-  node->nlo -= merged_lo;
-  node->nhi -= merged_hi;
 }
 
 /* Into QUEUE, insert NODE if it is not already queued, and if one of
@@ -3916,12 +4041,18 @@ mergelines_node (struct merge_node *restrict node, size_t total_lines,
 static void
 queue_check_insert (struct merge_node_queue *queue, struct merge_node *node)
 {
-  if (! node->queued)
+
+  if (!node->queued && !node->complete)
     {
-      bool lo_avail = (node->lo - node->end_lo) != 0;
-      bool hi_avail = (node->hi - node->end_hi) != 0;
-      if (lo_avail ? hi_avail || ! node->nhi : hi_avail && ! node->nlo)
-        queue_insert (queue, node);
+      if ((node->lo_child && node->hi_child && has_avail (node->lo_child) && has_avail (node->hi_child)) || // has both children with stuff available
+          (node->lo_child && has_avail (node->lo_child) && node->hi_child->complete) || // one child has stuff, other one done
+          (node->hi_child && has_avail (node->hi_child) && node->lo_child->complete) ||
+          (node->lo_child && has_avail (node->lo_child) && !node->hi_child) || // only one child
+          (node->hi_child && has_avail (node->hi_child) && !node->lo_child) ||
+          (!node->lo_child && !node->hi_child)) // no children (i.e. leaf node)
+        {
+          queue_insert (queue, node);
+        }
     }
 }
 
@@ -3937,7 +4068,7 @@ queue_check_insert_parent (struct merge_node_queue *queue,
       queue_check_insert (queue, node->parent);
       unlock_node (node->parent);
     }
-  else if (node->nlo + node->nhi == 0)
+  else if (node->complete)
     {
       /* If the MERGE_ROOT NODE has finished merging, insert the
          MERGE_END node.  */
@@ -3966,18 +4097,21 @@ merge_loop (struct merge_node_queue *queue,
           queue_insert (queue, node);
           break;
         }
-      mergelines_node (node, total_lines, tfp, temp_output);
-      queue_check_insert (queue, node);
-      queue_check_insert_parent (queue, node);
+      else
+        {
+          mergelines_node (node, total_lines, tfp, temp_output);
+          queue_check_insert (queue, node);
+          queue_check_insert_parent (queue, node);
 
-      unlock_node (node);
+          unlock_node (node);
+        }
     }
 }
 
 
 static void sortlines (struct line *restrict, size_t, size_t,
-                       struct merge_node *, bool, struct merge_node_queue *,
-                       FILE *, char const *);
+           struct merge_node *, bool, struct merge_node_queue *,
+           FILE *, char const *);
 
 /* Thread arguments for sortlines_thread. */
 
@@ -4071,46 +4205,37 @@ sortlines (struct line *restrict lines, size_t nthreads,
     {
       /* Nthreads = 1, this is a leaf NODE, or pthread_create failed.
          Sort with 1 thread. */
-      size_t nlo = node->nlo;
-      size_t nhi = node->nhi;
-      
-      /* FIXME: delete the 5 lines below that sorts using log P memory*/
-      struct line *temp = lines - total_lines;
-      if (1 < nhi)
-        sequential_sort (lines - nlo, nhi, temp - nlo / 2, false);
-      if (1 < nlo)
-        sequential_sort (lines, nlo, temp, false);
 
       /* sort using linked lists */
+      size_t nlo = node->nlo;
+      size_t nhi = node->nhi;
+
       struct line *lo_line;
       struct line *hi_line;
-      struct line empty_line;
+
       if (1 < nlo)
-        lo_line = sequential_sort_lists(lines - 1, nlo, &empty_line);
+        lo_line = sequential_sort_lists (lines - 1, nlo);
       else
         {
-          lo_line  = lines-1;
-          lo_line->next = &empty_line;
+          lo_line = lines - 1;
+          lo_line->next = NULL;
         }
 
       if (1 < nhi)
-        hi_line = sequential_sort_lists(lines - nlo - 1, nhi, &empty_line);
+        hi_line = sequential_sort_lists (lines - nlo - 1, nhi);
       else
         {
           hi_line = lines - nlo - 1;
-          hi_line->next = &empty_line;
+          hi_line->next = NULL;
         }
 
-      /* FIXME: node->lo should point to lo_line, node->hi should point to
-         hi_line, and and node->end_* should point to &empty_line for linked
-         list implementation. */
-      /* Update merge NODE. No need to lock yet. */
-      node->lo = lines;
-      node->hi = lines - nlo;
-      node->end_lo = lines - nlo;
-      node->end_hi = lines - nlo - nhi;
+      //fprintf(stderr, "sortlines: lo_line=%s (%p), hi_line=%s (%p)\n", lo_line->text, lo_line, hi_line->text, hi_line);
+
+      node->lo = lo_line;
+      node->hi = hi_line;
 
       queue_insert (queue, node);
+      //fprintf(stderr, "now merge_loop\n");
       merge_loop (queue, total_lines, tfp, temp_output);
     }
 
