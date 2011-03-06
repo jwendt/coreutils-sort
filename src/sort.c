@@ -3856,9 +3856,12 @@ has_avail (struct merge_node * n)
 static void
 grow_list_using_child_node (struct merge_node* node, struct merge_node* child, bool output, FILE* tfp, char const *temp_output)
 {
-  if (!child->complete)
-    pthread_mutex_lock (&child->datalock);
-  pthread_mutex_lock (&node->datalock);
+  while (pthread_mutex_trylock(&child->datalock) == EBUSY)
+    pthread_yield();
+  while (pthread_mutex_trylock(&node->datalock) == EBUSY)
+    pthread_yield();
+  //pthread_mutex_lock (&child->datalock);
+  //pthread_mutex_lock (&node->datalock);
 
   // pop the head from the child
   struct line* t = child->head;
@@ -3885,15 +3888,16 @@ grow_list_using_child_node (struct merge_node* node, struct merge_node* child, b
   if (output)
     write_unique (t, tfp, temp_output);
 
-  if (!child->complete)
-    pthread_mutex_unlock (&child->datalock);
+  pthread_mutex_unlock (&child->datalock);
   pthread_mutex_unlock (&node->datalock);
 }
 
 static void
 grow_list_leaf_node (struct merge_node* node, struct line** target, bool output, FILE* tfp, char const *temp_output)
 {
-  pthread_mutex_lock (&node->datalock);
+  while (pthread_mutex_trylock(&node->datalock) == EBUSY)
+    pthread_yield();
+  //pthread_mutex_lock (&node->datalock);
 
   struct line* t = *target;
 
