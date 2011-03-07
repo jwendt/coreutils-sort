@@ -3850,20 +3850,19 @@ write_unique (struct line const *line, FILE *tfp, char const *temp_output)
 inline bool
 has_avail (struct merge_node * n)
 {
+  //return (n->head && (n->head != n->tail || n->complete));
   return n->head != NULL;
 }
 
 static void
 grow_list_using_child_node (struct merge_node* node, struct merge_node* child, bool output, FILE* tfp, char const *temp_output)
 {
+  // pop the head from the child
   while (pthread_mutex_trylock(&child->datalock) == EBUSY)
     pthread_yield();
   while (pthread_mutex_trylock(&node->datalock) == EBUSY)
     pthread_yield();
-  //pthread_mutex_lock (&child->datalock);
-  //pthread_mutex_lock (&node->datalock);
 
-  // pop the head from the child
   struct line* t = child->head;
 
   // if there's only one element in the list, the list becomes empty list after popping the head
@@ -3897,7 +3896,6 @@ grow_list_leaf_node (struct merge_node* node, struct line** target, bool output,
 {
   while (pthread_mutex_trylock(&node->datalock) == EBUSY)
     pthread_yield();
-  //pthread_mutex_lock (&node->datalock);
 
   struct line* t = *target;
 
@@ -4027,6 +4025,8 @@ mergelines_node (struct merge_node *restrict node, size_t total_lines,
         }
     }
 
+  // destroy the list mutexes
+  // other than the root node, list mutexes should be destroyed only when the parent is complete because they will be in use until then.
   if (node->complete)
     {
       if (node->lo_child)
@@ -4453,21 +4453,7 @@ sort (char *const *files, size_t nfiles, char const *output_file,
       FILE *fp = xfopen (file, "r");
       FILE *tfp;
 
-      size_t bytes_per_line;
-      if (nthreads > 1)
-        {
-          /* Get log P. */
-          size_t tmp = 1;
-          size_t mult = 1;
-          while (tmp < nthreads)
-            {
-              tmp *= 2;
-              mult++;
-            }
-          bytes_per_line = (mult * sizeof (struct line));
-        }
-      else
-        bytes_per_line = sizeof (struct line) * 3 / 2;
+      size_t bytes_per_line = sizeof (struct line);
 
       if (! buf.alloc)
         initbuf (&buf, bytes_per_line,
