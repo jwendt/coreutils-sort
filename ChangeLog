@@ -1,3 +1,8 @@
+2011-3-9 Drew Kutilek <dkutilek@ucla.edu>
+	* src/sort.c (*_discriminator): GNU formatting and portability issues
+	fixed.
+	* tests/misc/sort-discrim: Added test for decimal places near overflow.
+
 2011-3-3 Drew Kutilek <dkutilek@ucla.edu>
 	* test-case-generators: organized test scripts and added scripts for
 	stage 2.

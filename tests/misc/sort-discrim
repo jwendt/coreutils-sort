@@ -55,12 +55,76 @@ $INTMAX_OFLOW
 
   compare out exp || fail=1
 
+nmax=`expr $INTMAX_MAX / 100`
+nmax_minus_1=`expr $nmax - 1`
+  printf -- "\
+-$nmax
+-$nmax_minus_1.9
+-$nmax_minus_1.8
+-$nmax_minus_1.7
+-$nmax_minus_1.6
+-$nmax_minus_1.5
+-$nmax_minus_1.4
+-$nmax_minus_1.3
+-$nmax_minus_1.2
+-$nmax_minus_1.1
+-$nmax_minus_1
+0
+$nmax_minus_1
+$nmax_minus_1.1
+$nmax_minus_1.2
+$nmax_minus_1.3
+$nmax_minus_1.4
+$nmax_minus_1.5
+$nmax_minus_1.6
+$nmax_minus_1.7
+$nmax_minus_1.8
+$nmax_minus_1.9
+$nmax
+" > exp
+
+  tac exp | sort -R --random-source=exp | sort -n > out || fail=1
+
+  compare out exp || fail=1
+
   printf -- "\
 $INTMAX_UFLOW
 $INTMAX_MIN
 0
 $INTMAX_MAX
 $INTMAX_OFLOW
+" > exp
+
+  tac exp | sort -R --random-source=exp | sort -h > out || fail=1
+
+  compare out exp || fail=1
+
+hmax=`expr $INTMAX_MAX / 10`
+hmax_minus_1=`expr $hmax - 1`
+  printf -- "\
+-$hmax
+-$hmax_minus_1.9
+-$hmax_minus_1.8
+-$hmax_minus_1.7
+-$hmax_minus_1.6
+-$hmax_minus_1.5
+-$hmax_minus_1.4
+-$hmax_minus_1.3
+-$hmax_minus_1.2
+-$hmax_minus_1.1
+-$hmax_minus_1
+0
+$hmax_minus_1
+$hmax_minus_1.1
+$hmax_minus_1.2
+$hmax_minus_1.3
+$hmax_minus_1.4
+$hmax_minus_1.5
+$hmax_minus_1.6
+$hmax_minus_1.7
+$hmax_minus_1.8
+$hmax_minus_1.9
+$hmax
 " > exp
 
   tac exp | sort -R --random-source=exp | sort -h > out || fail=1

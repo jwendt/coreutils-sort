@@ -1716,7 +1716,7 @@ limfield (struct line const *line, struct keyfield const *key)
 /* Return an 8 byte discriminator of the type numeric */
 
 static uintmax_t
-numeric_discriminator (uintmax_t *discrim, const char *data)
+numeric_discriminator (const char *data)
 {
   /* The 8 bytes of the discriminator are used as follows:
      | 1 sign bit | 63 bits for number representation |
@@ -1725,9 +1725,8 @@ numeric_discriminator (uintmax_t *discrim, const char *data)
      numbers.  The discriminator will be multiplied by 100 to include two
      decimal places. */
   bool positive = true, digit;
-  uintmax_t MAXIMUM = (UINTMAX_MAX>>1)/100;
+  uintmax_t discrim = 0, maximum = (UINTMAX_MAX >> 1) / 100;
   int i;
-  *discrim = 0;
 
   while (blanks[to_uchar (*data)])
     data++;
@@ -1748,12 +1747,12 @@ numeric_discriminator (uintmax_t *discrim, const char *data)
       /* Convert number to integer */
       if (digit)
       {
-        *discrim *= 10;
-        *discrim += (*data - '0');
-        if (*discrim > MAXIMUM)
+        discrim *= 10;
+        discrim += (*data - '0');
+        if (maximum <= discrim)
           {
             /* Overflow */
-            *discrim = UINTMAX_MAX;
+            discrim = UINTMAX_MAX;
             goto done;
           }
       }
@@ -1764,51 +1763,46 @@ numeric_discriminator (uintmax_t *discrim, const char *data)
     {
       /* Fraction conversion */
       data++;
-      for (i = 0; i < 2 && ISDIGIT (*data); i++)
+      for (i = 0; i < 2; i++)
         {
-          *discrim *= 10;
-          *discrim += (*data - '0');
-        }
-      while (i < 2)
-        {
-          *discrim *= 10;
-          i++;
+          discrim *= 10;
+          if (ISDIGIT (data[i]))
+            discrim += (data[i] - '0');
         }
     }
   else
-    *discrim *= 100;
+    discrim *= 100;
 
   done:
 
-  if (!positive && *discrim != 0)
+  if (!positive && discrim != 0)
     {
-      *discrim = ~(*discrim);
-      *discrim &= UINTMAX_MAX/2;
+      discrim = ~discrim;
+      discrim &= UINTMAX_MAX / 2;
     }
   else
     {
-      *discrim |= UINTMAX_MAX/2 + 1;
+      discrim |= UINTMAX_MAX / 2 + 1;
     }
 
-  return *discrim;
+  return discrim;
 }
 
 /* Return an 8 byte discriminator of the type human_numeric */
 
 static uintmax_t
-human_numeric_discriminator (uintmax_t *discrim, const char *data)
+human_numeric_discriminator (const char *data)
 {
   /* The 8 bytes of the discriminator are used as follows:
      | 1 sign bit | 4 magnitude bits | 59 bits for number representation |
      Because positive numbers should be considered larger than negative,
      the sign bit will be set to 1 for positive numbers, and 0 for negative
-     numbers. */
+     numbers. The discriminator will be multiplied by 10 to include a single
+     decimal place. */
   int magnitude, nonzero = 0;
   bool positive = true, digit;
-  uintmax_t set_magnitude, MAXIMUM = (UINTMAX_MAX>>5)/10;
+  uintmax_t set_magnitude, discrim = 0, maximum = (UINTMAX_MAX >> 5) / 10;
   char ch;
-
-  *discrim = 0;
 
   while (blanks[to_uchar (*data)])
     data++;
@@ -1829,80 +1823,73 @@ human_numeric_discriminator (uintmax_t *discrim, const char *data)
       /* Convert number to integer */
       if (digit)
         {
-          *discrim *= 10;
-          *discrim += (*data -'0');
-          if (*discrim > MAXIMUM)
+          discrim *= 10;
+          discrim += (*data -'0');
+          if (maximum <= discrim)
             {
               /* Overflow */
-              *discrim = UINTMAX_MAX>>5;
-              goto done;
+              discrim = UINTMAX_MAX >> 5;
+              if (*data != decimal_point)
+              while (ISDIGIT (*data) || *data == thousands_sep)
+                data++;
+              if (*data == decimal_point)
+                while (ISDIGIT (*data))
+                  data++;
+              magnitude = unit_order[to_uchar (*data)];
+              goto setmag;
             }
         }
       data++;
     }
 
-  *discrim *= 10;
+  discrim *= 10;
 
   if (*data == decimal_point)
     {
       /* Fraction conversion */
       data++;
       if (ISDIGIT (*data))
-        *discrim += (*data - '0');
+        discrim += (*data - '0');
     }
 
-  done:
+  /* Set magnitude bits */
+  ch = *data;
+  if (*data == decimal_point)
+    while (ISDIGIT (ch = *data++))
+      nonzero |= ch - '0';
 
-  if (*discrim == UINTMAX_MAX>>5)
-    {
-      /* Handle overflow special cases */
-      if (*data != decimal_point)
-        while (ISDIGIT (*data) || *data == thousands_sep)
-          data++;
-      if (*data == decimal_point)
-        while (ISDIGIT (*data))
-          data++;
-      magnitude = unit_order[to_uchar (*data)];
-    }
+  if (nonzero || discrim > 0)
+    magnitude = unit_order[to_uchar (ch)];
   else
-    {
-      /* Set magnitude bits */
-      ch = *data;
-      if (*data == decimal_point)
-        while (ISDIGIT (ch = *data++))
-          nonzero |= ch - '0';
+    magnitude = 0;
 
-      if (nonzero || *discrim > 0)
-        magnitude = unit_order[to_uchar (ch)];
-      else
-        magnitude = 0;
-    }
-
+  setmag:
   set_magnitude = magnitude;
   set_magnitude <<= 59;
-  *discrim |= set_magnitude;
+  discrim |= set_magnitude;
 
-  if (!positive && *discrim != 0)
+  if (!positive && discrim != 0)
     {
-      *discrim = ~(*discrim);
-      *discrim &= UINTMAX_MAX/2;
+      discrim = ~discrim;
+      discrim &= UINTMAX_MAX / 2;
     }
   else
     {
-      *discrim |= UINTMAX_MAX/2 + 1;
+      discrim |= UINTMAX_MAX / 2 + 1;
     }
 
-  return *discrim;
+  return discrim;
 }
 
 /* Return an 8 byte discriminator of the type general_numeric */
 
 static uintmax_t
-general_numeric_discriminator (uintmax_t *discrim, const char *data)
+general_numeric_discriminator (const char *data)
 {
   /* Because positive numbers should be considered larger than negative,
      the sign bit will be set to 1 for positive numbers, and negative numbers
      will have all of their bits flipped. */
+  uintmax_t discrim = 0;
   char *endptr;
   double d;
 
@@ -1915,11 +1902,9 @@ general_numeric_discriminator (uintmax_t *discrim, const char *data)
          will work fine.  On a Little Endian machine, conversion will only
          work when sizeof double <= sizeof uintmax_t.  Additionally, check
          for IEEE floating point support. */
-      uintmax_t bitflip;
-      if (sizeof (uintmax_t) < 64)
-        bitflip = UINTMAX_MAX/2 + 1;
-      else
-        bitflip = 0x8000000000000000;
+
+      /* bitflip should be the highest order bit of a double. */
+      uintmax_t bitflip = (uintmax_t) 1 << ((CHAR_BIT * sizeof (double)) - 1);
 
       union
       {
@@ -1936,17 +1921,17 @@ general_numeric_discriminator (uintmax_t *discrim, const char *data)
       /* Get the value as a double from the string */
       dbldiscrim.d = strtod (data, &endptr);
       dbldiscrim.d = dbldiscrim.d ? dbldiscrim.d : 0;
-      *discrim = dbldiscrim.uim;
+      discrim = dbldiscrim.uim;
 
-      if (*discrim & bitflip)
+      if (discrim & bitflip)
         {
           /* If negative, flip every bit. */
-          *discrim = ~(*discrim);
+          discrim = ~discrim;
         }
       else
         {
           /* Otherwise, flip only ths sign bit */
-          *discrim ^= bitflip;
+          discrim ^= bitflip;
         }
     }
   else
@@ -1954,19 +1939,19 @@ general_numeric_discriminator (uintmax_t *discrim, const char *data)
       /* No IEEE floating point, so use simple conversion to
          integer representation. */
       d = strtod (data, &endptr);
-      if ((d < 0 ? -d : d) < UINTMAX_MAX/2)
+      if ((d < 0 ? -d : d) < UINTMAX_MAX / 2)
         {
           /* If the double is within representable range */
           if (d < 0)
             {
-              *discrim = (uintmax_t) -d;
-              *discrim = ~(*discrim);
-              *discrim &= UINTMAX_MAX/2;
+              discrim = (uintmax_t) -d;
+              discrim = ~discrim;
+              discrim &= UINTMAX_MAX / 2;
             }
           else
             {
-              *discrim = (uintmax_t) d;
-              *discrim |= (UINTMAX_MAX/2 + 1);
+              discrim = (uintmax_t) d;
+              discrim |= (UINTMAX_MAX / 2 + 1);
             }
         }
       else
@@ -1974,13 +1959,13 @@ general_numeric_discriminator (uintmax_t *discrim, const char *data)
           /* Double is too large to represent, set to max or
              min value */
           if (d < 0)
-            *discrim = 0;
+            discrim = 0;
           else
-            *discrim = UINTMAX_MAX;
+            discrim = UINTMAX_MAX;
         }
     }
 
-  return *discrim;
+  return discrim;
 }
 
 /* Return a discriminator for LINE, based on KEY.  If KEY is null,
@@ -1989,7 +1974,7 @@ general_numeric_discriminator (uintmax_t *discrim, const char *data)
 static uintmax_t
 line_discriminator (struct line const *line, struct keyfield const *key)
 {
-  uintmax_t discrim = 0;
+  uintmax_t discrim;
   char *ptr = line->text;
   char *lim = ptr + line->length - 1;
   char ch = '\0';
@@ -2051,15 +2036,15 @@ line_discriminator (struct line const *line, struct keyfield const *key)
         {
           if (key->numeric)
             {
-              numeric_discriminator (&discrim, t);
+              discrim = numeric_discriminator (t);
             }
           else if (key->human_numeric)
             {
-              human_numeric_discriminator (&discrim, t);
+              discrim = human_numeric_discriminator (t);
             }
           else if (key->general_numeric)
             {
-              general_numeric_discriminator (&discrim, t);
+              discrim = general_numeric_discriminator (t);
             }
           else if (key->month)
             {
