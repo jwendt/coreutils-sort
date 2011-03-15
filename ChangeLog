@@ -1,3 +1,8 @@
+2011-3-15 Drew Kutilek <dkutilek@ucla.edu>
+	* src/sort.c (sequential_sort_lists, mergelines_node, struct merge_node,
+	sortlines, queue_check_insert, queue_check_insert_parent): all updated
+	to a fully functioning linked list.
+
 2011-3-9 Drew Kutilek <dkutilek@ucla.edu>
 	* src/sort.c (*_discriminator): GNU formatting and portability issues
 	fixed.
