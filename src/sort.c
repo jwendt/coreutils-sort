@@ -3853,103 +3853,116 @@ mergelines_node (struct merge_node *restrict node, size_t total_lines,
   if (node->level > MERGE_ROOT)
     {
       /* Merge to destination list. */
-      while (node->lo != NULL && node->hi != NULL &&
-             node->lo != node->end_lo && node->hi != node->end_hi
-             && to_merge--)
+      while (to_merge-- && node->lo != NULL && node->hi != NULL)
         {
-          if (compare (node->lo, node->hi) <= 0)
+          /* Both Data (Basic Case) */
+          if (node->lo != node->end_lo && node->hi != node->end_hi)
             {
-              list_add (node, node->lo);
-              node->lo = node->lo->next;
-              merged_lo++;
-            }
-          else
-            {
-              list_add (node, node->hi);
-              node->hi = node->hi->next;
-              merged_hi++;
-            }
-        }
-
-      while ((node->lo != NULL && node->hi != NULL) &&
-             (node->lo == node->end_lo || node->hi == node->end_hi))
-        {
-          /* There are 8 edge cases to worry about:
-             [lo = end_lo && hi != end_hi]
-               1. [lo == empty_line]
-               2. [lo != empty_line]
-             [hi == end_hi && lo != end_lo]
-               3. [hi == &empty_line]
-               4. [hi != &empty_line]
-             [hi == end_hi && lo == end_lo]
-               5. [hi == &empty_line && lo != &empty_line]
-               6. [lo == &empty_line && hi != &empty_line]
-               7. [lo == &empty_line && hi == &empty_line]
-               8. [hi != &empty_line && lo != &empty_line]
-             
-             Setting the lo/hi pointer to NULL tells it's
-             lo/hi child that it has run out of things to merge.
-             
-             When the lo/hi pointer is &empty_line, it means the
-             sub-tree with the lo/hi child as the root is completely
-             done, and no more input is coming up that child.
-          */
-          if (node->lo == node->end_lo && node->hi != node->end_hi)
-            {
-              if (node->lo == &empty_line)
+              if (compare (node->lo, node->hi) <= 0)
                 {
-                  if (to_merge--)
-                    {
-                      list_add (node, node->hi);
-                      node->hi = node->hi->next;
-                      merged_hi++;
-                    }
-                  else
-                    {
-                      break;
-                    }
+                  list_add (node, node->lo);
+                  node->lo = node->lo->next;
+                  merged_lo++;
                 }
               else
                 {
-                  if (to_merge--)
+                  list_add (node, node->hi);
+                  node->hi = node->hi->next;
+                  merged_hi++;
+                }
+            }
+          /* At least 1 End of Batch (7 Edge Cases)
+             [hi == end_hi && lo == end_lo]
+               1. [lo == &empty_line && hi != &empty_line]
+               2. [lo != &empty_line && hi == &empty_line]
+               3. [lo != &empty_line && hi != &empty_line]
+             [lo = end_lo && hi != end_hi]
+               4. [lo == empty_line]
+               5. [lo != empty_line]
+             [hi == end_hi && lo != end_lo]
+               6. [hi == &empty_line]
+               7. [hi != &empty_line]
+
+             Setting the lo/hi pointer to NULL tells it's
+             lo/hi child that it has run out of things to merge.
+
+             When the lo/hi pointer is &empty_line, it means the
+             sub-tree with the lo/hi child as the root is completely
+             done, and no more input is coming up that child. */
+          else
+            {
+              if (node->lo == node->end_lo)
+                {
+                  if (node->hi == node->end_hi)
                     {
-                      if (compare (node->lo, node->hi) <= 0)
+                      if (node->lo == &empty_line)
                         {
-                          list_add (node, node->lo);
-                          node->lo = NULL;
-                          merged_lo++;
+                          if (node->hi != &empty_line)
+                            {
+                              list_add (node, node->hi);
+                              node->hi = NULL;
+                              merged_hi++;
+                            }
                         }
                       else
+                        {
+                          if (node->hi == &empty_line)
+                            {
+                              list_add (node, node->lo);
+                              node->lo = NULL;
+                              merged_lo++;
+                            }
+                          else
+                            {
+                              if (compare (node->lo, node->hi) <= 0)
+                                {
+                                  list_add (node, node->lo);
+                                  node->lo = NULL;
+                                  merged_lo++;
+                                }
+                              else
+                                {
+                                  list_add (node, node->hi);
+                                  node->hi = NULL;
+                                  merged_hi++;
+                                }
+                            }
+                        }
+                    }
+                  else
+                    {
+                      if (node->lo == &empty_line)
                         {
                           list_add (node, node->hi);
                           node->hi = node->hi->next;
                           merged_hi++;
                         }
-                    }
-                  else
-                    {
-                      break;
+                      else
+                        {
+                          if (compare (node->lo, node->hi) <= 0)
+                            {
+                              list_add (node, node->lo);
+                              node->lo = NULL;
+                              merged_lo++;
+                            }
+                          else
+                            {
+                              list_add (node, node->hi);
+                              node->hi = node->hi->next;
+                              merged_hi++;
+                            }
+                        }
                     }
                 }
-            }
-          else if (node->hi == node->end_hi && node->lo != node->end_lo)
-            {
-              if (node->hi == &empty_line)
+              else
                 {
-                  if (to_merge--)
+                  if (node->hi == &empty_line)
                     {
                       list_add (node, node->lo);
                       node->lo = node->lo->next;
                       merged_lo++;
                     }
                   else
-                    {
-                      break;
-                    }
-                }
-              else
-                {
-                  if (to_merge--)
                     {
                       if (compare (node->lo, node->hi) <= 0)
                         {
@@ -3964,69 +3977,11 @@ mergelines_node (struct merge_node *restrict node, size_t total_lines,
                           merged_hi++;
                         }
                     }
-                  else
-                    {
-                      break;
-                    }
-                }
-            }
-          else if (node->lo == node->end_lo && node->hi == node->end_hi)
-            {
-              if (node->lo == &empty_line)
-                {
-                  if (node->hi == &empty_line)
-                    {
-                      list_add (node, &empty_line);
-                      break;
-                    }
-                  else
-                    {
-                      if (to_merge--)
-                        {
-                          list_add (node, node->hi);
-                          node->hi = NULL;
-                          merged_hi++;
-                        }
-                      break;
-                    }
-                }
-              else
-                {
-                  if (node->hi == &empty_line)
-                    {
-                      if (to_merge--)
-                        {
-                          list_add (node, node->lo);
-                          node->lo = NULL;
-                          merged_lo++;
-                        }
-                      break;
-                    }
-                  else
-                    {
-                      if (to_merge--)
-                        {
-                          if (compare (node->lo, node->hi) <= 0)
-                            {
-                              list_add (node, node->lo);
-                              node->lo = NULL;
-                              merged_lo++;
-                            }
-                          else
-                            {
-                              list_add (node, node->hi);
-                              node->hi = NULL;
-                              merged_hi++;
-                            }
-                        }
-                      else
-                       {
-                         break;
-                       }
-                    }
                 }
             }
         }
+        if (node->lo == &empty_line && node->hi == &empty_line)
+          list_add (node, &empty_line);
     }
   else
     {

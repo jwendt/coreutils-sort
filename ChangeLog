@@ -1,3 +1,7 @@
+2011-4-14 Drew Kutilek <dkutilek@ucla.edu>
+	* src/sort.c (mergelines_node): condensed the if-ladder and made code
+	as clear as possible.  No performance tests have been run yet.
+
 2011-3-15 Drew Kutilek <dkutilek@ucla.edu>
 	* src/sort.c (sequential_sort_lists, mergelines_node, struct merge_node,
 	sortlines, queue_check_insert, queue_check_insert_parent): all updated
