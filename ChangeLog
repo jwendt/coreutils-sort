@@ -1,3 +1,7 @@
+2011-5-3 Drew Kutilek <dkutilek@ucla.edu>
+	* test-case-generators/generators (general,numeric,human): fixed bugs
+	with output.
+
 2011-4-14 Drew Kutilek <dkutilek@ucla.edu>
 	* src/sort.c (mergelines_node): condensed the if-ladder and made code
 	as clear as possible.  No performance tests have been run yet.
