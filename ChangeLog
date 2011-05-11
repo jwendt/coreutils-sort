@@ -1,3 +1,17 @@
+2011-5-10 Drew Kutilek <dkutilek@ucla.edu>
+	* src/sort.c (struct line): Removed size_t length.  It can be calculated
+	by using neighboring line structures, reducing memory.
+	(line_length): New function, uses neighboring line structure to
+	calculate length of text stored.
+	(begfield, limfield, line_discriminator, fillbuf, debug_key, keycompare,
+	compare, check, mergefps): Replaced calls to length data member with
+	function call.
+	(fillbuf): Implemented a dummy line structure so calculating length
+	works on the last line structure.
+	(check, mergefps, write_unique): Replaced local temporary line
+	structures with an array of two lines in order for the replacement of
+	the length data member with a calculation of neighboring lines.
+
 2011-5-3 Drew Kutilek <dkutilek@ucla.edu>
 	* test-case-generators/generators (general,numeric,human): fixed bugs
 	with output.

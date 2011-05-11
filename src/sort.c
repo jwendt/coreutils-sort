@@ -185,13 +185,17 @@ static char eolchar = '\n';
 struct line
 {
   char *text;			/* Text of the line. */
-  size_t length;		/* Length including final newline. */
   /* Line discriminator.  A sorts before B if A->discrim < B->discrim,
     and after B if A->discrim > B->discrim, but if two discrim values
     are equal the lines may not necessarily compare equal.  */
   uintmax_t discrim;		/* Discriminator for quick comparisons */
   struct line * next;		/* Pointer to next line in sorted order */
 };
+
+static inline size_t line_length (struct line const * item)
+{
+  return (item - 1)->text - item->text;
+}
 
 static struct line empty_line;
 
@@ -1573,7 +1577,7 @@ buffer_linelim (struct buffer const *buf)
 static char *
 begfield (struct line const *line, struct keyfield const *key)
 {
-  char *ptr = line->text, *lim = ptr + line->length - 1;
+  char *ptr = line->text, *lim = ptr + line_length (line) - 1;
   size_t sword = key->sword;
   size_t schar = key->schar;
 
@@ -1615,7 +1619,7 @@ begfield (struct line const *line, struct keyfield const *key)
 static char *
 limfield (struct line const *line, struct keyfield const *key)
 {
-  char *ptr = line->text, *lim = ptr + line->length - 1;
+  char *ptr = line->text, *lim = ptr + line_length (line) - 1;
   size_t eword = key->eword, echar = key->echar;
 
   if (echar == 0)
@@ -1974,7 +1978,7 @@ line_discriminator (struct line const *line, struct keyfield const *key)
 {
   uintmax_t discrim;
   char *ptr = line->text;
-  char *lim = ptr + line->length - 1;
+  char *lim = ptr + line_length (line) - 1;
   char ch = '\0';
   uint32_t dig[MD5_DIGEST_SIZE / sizeof (uint32_t)];
   void *allocated = NULL;
@@ -2137,8 +2141,8 @@ fillbuf (struct buffer *buf, FILE *fp, char const *file)
       char *ptr = buf->buf + buf->used;
       struct line *linelim = buffer_linelim (buf);
       struct line *line = linelim - buf->nlines;
-      size_t avail = (char *) linelim - buf->nlines * line_bytes - ptr;
-      char *line_start = buf->nlines ? line->text + line->length : buf->buf;
+      size_t avail = (char *) linelim - (buf->nlines + 1) * line_bytes - ptr;
+      char *line_start = buf->nlines ? line->text + line_length (line) : buf->buf;
 
       while (line_bytes + 1 < avail)
         {
@@ -2177,9 +2181,11 @@ fillbuf (struct buffer *buf, FILE *fp, char const *file)
               ptr = p + 1;
               line--;
               line->text = line_start;
-              line->length = ptr - line_start;
+              /* Initialize the dummy line structure to enable line_length
+                 to run without any special cases.  */
+              (line - 1)->text = ptr;
               line->discrim = line_discriminator (line, key);
-              mergesize = MAX (mergesize, line->length);
+              mergesize = MAX (mergesize, line_length (line));
               avail -= line_bytes;
               line_start = ptr;
             }
@@ -2597,7 +2603,7 @@ debug_key (struct line const *line, struct keyfield const *key)
 {
   char *text = line->text;
   char *beg = text;
-  char *lim = text + line->length - 1;
+  char *lim = text + line_length (line) - 1;
 
   if (key)
     {
@@ -2845,7 +2851,7 @@ keycompare (struct line const *a, struct line const *b)
       if (key->eword != SIZE_MAX)
         lima = limfield (a, key), limb = limfield (b, key);
       else
-        lima = a->text + a->length - 1, limb = b->text + b->length - 1;
+        lima = a->text + line_length (a) - 1, limb = b->text + line_length (b) - 1;
 
       if (key->sword != SIZE_MAX)
         texta = begfield (a, key), textb = begfield (b, key);
@@ -3019,7 +3025,7 @@ keycompare (struct line const *a, struct line const *b)
       if (key->eword != SIZE_MAX)
         lima = limfield (a, key), limb = limfield (b, key);
       else
-        lima = a->text + a->length - 1, limb = b->text + b->length - 1;
+        lima = a->text + line_length (a) - 1, limb = b->text + line_length (b) - 1;
 
       if (key->sword != SIZE_MAX)
         texta = begfield (a, key), textb = begfield (b, key);
@@ -3070,7 +3076,7 @@ compare (struct line const *a, struct line const *b)
 
   /* If the keys all compare equal (or no keys were specified)
      fall through to the default comparison.  */
-  alen = a->length - 1, blen = b->length - 1;
+  alen = line_length (a) - 1, blen = line_length (b) - 1;
 
   if (alen == 0)
     diff = - NONZERO (blen);
@@ -3099,7 +3105,7 @@ static void
 write_line (struct line const *line, FILE *fp, char const *output_file)
 {
   char *buf = line->text;
-  size_t n_bytes = line->length;
+  size_t n_bytes = line_length (line);
   char *ebuf = buf + n_bytes;
 
   if (!output_file && debug)
@@ -3139,7 +3145,7 @@ check (char const *file_name, char checkonly)
 {
   FILE *fp = xfopen (file_name, "r");
   struct buffer buf;		/* Input buffer. */
-  struct line temp;		/* Copy of previous line. */
+  struct line temp[2];		/* Copy of previous line. */
   size_t alloc = 0;
   uintmax_t line_number = 0;
   bool nonunique = ! unique;
@@ -3147,7 +3153,7 @@ check (char const *file_name, char checkonly)
 
   initbuf (&buf, sizeof (struct line),
            MAX (merge_buffer_size, sort_size));
-  temp.text = NULL;
+  temp[1].text = NULL;
 
   while (fillbuf (&buf, fp, file_name))
     {
@@ -3156,7 +3162,7 @@ check (char const *file_name, char checkonly)
 
       /* Make sure the line saved from the old buffer contents is
          less than or equal to the first line of the new buffer. */
-      if (alloc && nonunique <= compare (&temp, line - 1))
+      if (alloc && nonunique <= compare (&(temp[1]), line - 1))
         {
         found_disorder:
           {
@@ -3185,30 +3191,33 @@ check (char const *file_name, char checkonly)
       line_number += buf.nlines;
 
       /* Save the last line of the buffer.  */
-      if (alloc < line->length)
+      if (alloc < line_length (line))
         {
           do
             {
               alloc *= 2;
               if (! alloc)
                 {
-                  alloc = line->length;
+                  alloc = line_length (line);
                   break;
                 }
             }
-          while (alloc < line->length);
+          while (alloc < line_length (line));
 
-          free (temp.text);
-          temp.text = xmalloc (alloc);
+          free (temp[1].text);
+          temp[1].text = xmalloc (alloc);
         }
-      memcpy (temp.text, line->text, line->length);
-      temp.length = line->length;
-      temp.discrim = line->discrim;
+      memcpy (temp[1].text, line->text, line_length (line));
+      /* Store the length in the previous line to allow the
+         reduction in memory usage in the line array.
+         See function line_length.  */
+      temp[0].text = temp[1].text + line_length (line);
+      temp[1].discrim = line->discrim;
     }
 
   xfclose (fp, file_name);
   free (buf.buf);
-  free (temp.text);
+  free (temp[1].text);
   return ordered;
 }
 
@@ -3250,7 +3259,7 @@ mergefps (struct sortfile *files, size_t ntemps, size_t nfiles,
 {
   struct buffer *buffer = xnmalloc (nfiles, sizeof *buffer);
                                 /* Input buffers for each file. */
-  struct line saved;		/* Saved line storage for unique check. */
+  struct line saved[2];         /* Saved line storage for unique check. */
   struct line const *savedline = NULL;
                                 /* &saved if there is a saved line. */
   size_t savealloc = 0;		/* Size allocated for the saved line. */
@@ -3265,7 +3274,7 @@ mergefps (struct sortfile *files, size_t ntemps, size_t nfiles,
   size_t i;
   size_t j;
   size_t t;
-  saved.text = NULL;
+  saved[1].text = NULL;
 
   /* Read initial lines from each input file. */
   for (i = 0; i < nfiles; )
@@ -3319,27 +3328,30 @@ mergefps (struct sortfile *files, size_t ntemps, size_t nfiles,
           if (savedline && compare (savedline, smallest))
             {
               savedline = NULL;
-              write_line (&saved, ofp, output_file);
+              write_line (&(saved[1]), ofp, output_file);
             }
           if (!savedline)
             {
-              savedline = &saved;
-              if (savealloc < smallest->length)
+              savedline = &(saved[1]);
+              if (savealloc < line_length (smallest))
                 {
                   do
                     if (! savealloc)
                       {
-                        savealloc = smallest->length;
+                        savealloc = line_length (smallest);
                         break;
                       }
-                  while ((savealloc *= 2) < smallest->length);
+                  while ((savealloc *= 2) < line_length (smallest));
 
-                  free (saved.text);
-                  saved.text = xmalloc (savealloc);
+                  free (saved[1].text);
+                  saved[1].text = xmalloc (savealloc);
                 }
-              saved.length = smallest->length;
-              saved.discrim = smallest->discrim;
-              memcpy (saved.text, smallest->text, saved.length);
+              /* Store the length in the previous line to allow the
+                 reduction in memory usage in the line array.
+                 See function line_length.  */
+              saved[0].text = saved[1].text + line_length (smallest);
+              saved[1].discrim = smallest->discrim;
+              memcpy (saved[1].text, smallest->text, line_length (smallest));
             }
         }
       else
@@ -3414,8 +3426,8 @@ mergefps (struct sortfile *files, size_t ntemps, size_t nfiles,
 
   if (unique && savedline)
     {
-      write_line (&saved, ofp, output_file);
-      free (saved.text);
+      write_line (&(saved[1]), ofp, output_file);
+      free (saved[1].text);
     }
 
   xfclose (ofp, output_file);
@@ -3808,13 +3820,14 @@ queue_pop (struct merge_node_queue *queue)
 static void
 write_unique (struct line const *line, FILE *tfp, char const *temp_output)
 {
-  static struct line saved;
+  static struct line saved[2];
 
   if (unique)
     {
-      if (saved.text && ! compare (line, &saved))
+      if (saved[1].text && ! compare (line, &(saved[1])))
         return;
-      saved = *line;
+      saved[1] = *line;
+      saved[0].text = saved[1].text + line_length (line);
     }
 
   write_line (line, tfp, temp_output);
