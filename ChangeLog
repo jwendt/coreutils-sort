@@ -1,4 +1,13 @@
+2011-5-11 Drew Kutilek <dkutilek@ucla.edu>
+
+	* ChangeLog: Reformatted to match line cut of at charater 80.  Added
+	newline between header and changes of most posts.
+	* test-case-generators/generators (general,numeric,human): Updated code
+	to GNU Coding standards.  Fixed the distribution of the output.
+	Simplified the code.
+
 2011-5-10 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c (struct line): Removed size_t length.  It can be calculated
 	by using neighboring line structures, reducing memory.
 	(line_length): New function, uses neighboring line structure to
@@ -13,28 +22,34 @@
 	the length data member with a calculation of neighboring lines.
 
 2011-5-3 Drew Kutilek <dkutilek@ucla.edu>
+
 	* test-case-generators/generators (general,numeric,human): fixed bugs
 	with output.
 
 2011-4-14 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c (mergelines_node): condensed the if-ladder and made code
 	as clear as possible.  No performance tests have been run yet.
 
 2011-3-15 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c (sequential_sort_lists, mergelines_node, struct merge_node,
 	sortlines, queue_check_insert, queue_check_insert_parent): all updated
 	to a fully functioning linked list.
 
 2011-3-9 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c (*_discriminator): GNU formatting and portability issues
 	fixed.
 	* tests/misc/sort-discrim: Added test for decimal places near overflow.
 
 2011-3-3 Drew Kutilek <dkutilek@ucla.edu>
+
 	* test-case-generators: organized test scripts and added scripts for
 	stage 2.
 
 2011-3-3 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c (LINES_BIGENDIAN): New preprocessor macro, for endianness
 	check. 
 	(general_numeric_discriminator): GNU formatting
@@ -42,87 +57,102 @@
 	(human_numeric_discriminator): GNU formatting
 
 2011-2-25 James Wendt <jwendt@cs.ucla.edu>
+
 	* src/sort.c (general_numeric_discriminator): Removed duplicate
 	declaration.
 	* src/sort.c (struct sorted_ends): Struct not necessary, removed.
-	* src/sort.c (sequential_sort_lists): Now returns pointer to top of sorted
-	list and guarentees end of linked list points to &empty_line.
-	* src/sort.c (mergelines_list): While loop condition now checks if line is
-	not equal to empty_line instead of updating a counter after each iteration.
+	* src/sort.c (sequential_sort_lists): Now returns pointer to top of
+	sorted list and guarentees end of linked list points to &empty_line.
+	* src/sort.c (mergelines_list): While loop condition now checks if line
+	is not equal to empty_line instead of updating a counter after each
+	iteration.
 	* src/sort.c (sortlines): Properly assigns single element lists the
 	empty_line as the next line.
 
 2011-2-23 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c (*_discriminator): fixed formatting to meet GNU standards
 	* src/sort.c (general_numeric_discriminator): Now checks for x86
 
 2011-2-22 James Wendt <jwendt@cs.ucla.edu>
-	* src/sort.c (mergelines_lists, sequential_sort_lists): Added spaces around
-	parens to meet GNU's coding standards.
+
+	* src/sort.c (mergelines_lists, sequential_sort_lists): Added spaces
+	around parens to meet GNU's coding standards.
 
 2011-2-22 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c (line_discriminator, general_numeric_discriminator,
 	human_numeric_discriminator): Added and removed spaces around parens
 	to meet GNU's coding standards.
 
 2011-2-22 James Wendt <jwendt@cs.ucla.edu>
+
 	* src/sort.c (struct line): Added pointer to next sorted line.
 	* src/sort.c (struct sorted_ends): New struct to house tuple (start,
 	end) of sorted linked list of lines (not yet implemented).
-	* src/sort.c (mergelines_lists): New function. Merges two linked lists of
-	lines in place.
-	* src/sort.c (sequental_sort_lists): New function. Sorts and merges linked
-	lists of lines.
+	* src/sort.c (mergelines_lists): New function. Merges two linked lists
+	of lines in place.
+	* src/sort.c (sequental_sort_lists): New function. Sorts and merges
+	linked lists of lines.
 
 2011-2-16 Drew Kutilek <dkutilek@ucla.edu>
-	* tests/misc/sort-discrim: added another test case for human
-	numeric.
+
+	* tests/misc/sort-discrim: added another test case for human numeric.
 	* src/sort.c (debug_key): added change from GNU. we really should
 	merge our coreutils with GNU's.  A lots changed.
 
 2011-2-16 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c: deleted unneeded comments in sort.c in preparation
 	to submit a patch.
 
 2011-2-10 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c: Made final pass for GNU coding standards.  Source code
 	is ready for tagging and for submission to GNU.
 
 2011-2-10 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c (line_discriminator): removed call to strxfrm.  if a
 	default compare is needed, discriminator is only used in C or POSIX
 	locale, any other locale the disriminator is set to 0.  Same
 	performance in other locales, and increase in speed in C or POSIX.
 
 2011-2-9 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c (general_numeric_discriminator): removed malloc and
 	memcpy.  changed argument to a reference to a discriminator.  slight
 	increase of speed.
 
 2011-2-8 Drew Kutilek <dkutilek@ucla.edu>
+
 	* test-case-generators/human_numeric_generator.c (main): added random
 	length of numbers generated to vary test cases more.
 	* test-case-generators/: added new testing scripts and makefile. view
 	test-case-generators/README for details.
 
 2011-2-8 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c (numeric_discriminator): changed algorithm and discrim
 	representation.  has shown initial speed up.
 	* src/sort.c (human_numeric_discriminator): changed algorithm and
 	discrim representation.  has shown initial speed up.
 
 2011-2-6 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c (numeric_discriminator): fixed algorithm to handle
 	thousands separators the same way as the existing code.
 	* src/sort.c (human_numeric_discriminator): fixed algorithm to handle
 	thousands separators the same way as the existing code.
 
 2011-2-6 Drew Kutilek <dkutilek@ucla.edu>
+
 	* test-case-generators/numeric_generator_no_fraction.c: added new test
 	case generator to test the new implementation of the numeric
 	discriminator.
 
 2011-2-6 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c (numeric_discriminator): changed implementation to simply
 	count the number of digits instead of representing the whole number.
 	* src/sort.c (human_numeric_discriminator): changed implementation to
@@ -138,22 +168,26 @@
 	numeric discriminator to match new number of arguments.
 
 2011-2-2 Kevin Deng <dengchao@gmail.com>
+
 	* src/sort.c (version_discriminator): Removed the discriminator
 	generator. Not going to submit it to GNU due to unclear functionality
 	of -V mode, as well as lack of performance gain.
 
 2011-2-2 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c (numeric_discriminator): handles overflow correctly now
 	* src/sort.c (human_numeric_discriminator): handles overflow
 	correctly now.
 
 2011-2-2 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c (numeric_discriminator): Fixed bug where if conversion
 	to double failed it returned 0, which is our representation of the
 	largest negative number.  Now returns 0x8000000000000000, which is
 	our representation of 0.  Passes all make check tests.
 
 2011-2-2 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c (find_unit_order_discriminator): New function.
 	Optimized version of find_unit_order for human_numeric_discrim.
 	Changed number of inputs.
@@ -169,22 +203,26 @@
 	change in number of arguments.
 
 2011-2-2 James Wendt <jwendt@cs.ucla.edu>
+
 	* src/sort.c (numeric_discriminator): Replaced entire function with much
 	simpler implementation. Major performance (runtime) increase.
 	* src/sort.c (general_numeric_discriminator): Fixed memory leak.
 
 2011-2-1 Drew Kutilek <dkutilek@ucla.edu>
+
 	* test-case-generators/numeric_generator.c: Added test case generator
 	for numeric_discriminator.
 	* test-case-generators/human_numeric_generator.c: Added test case
 	generator for human_numeric_discriminator.
 
 2011-2-1 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c (numeric_discriminator): Slight performance increase.
 	* src/sort.c (human_numeric_discriminator): Slight performance
 	increase.
 
 2011-1-31 Kevin Deng <dengchao@gmail.com>
+
 	* src/sort.c (version_discriminator): Removed previous implementation.
 	Current GNU implementation doesn't do what documentation says it's 
 	supposed to do. Added new implementation of discrim that follows what 
@@ -195,29 +233,36 @@
 	values correctly.
 
 2011-1-31 Drew Kutilek <dkutilek@ucla.edu>
-	* src/sort.c (line_discriminator): Fixed error with "/tests/misc/sort-compress".
-	Program no longer dumps core due to an unallocated pointer being freed.
+
+	* src/sort.c (line_discriminator): Fixed error with
+	"/tests/misc/sort-compress". Program no longer dumps core due to an
+	unallocated pointer being freed.
 
 2011-1-31 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c (human_numeric_discriminator): Fixed error with negative
-	numbers.  Program now passes all -h tests in "/tests/misc/sort".  Program
-	only fails -g options now.
+	numbers.  Program now passes all -h tests in "/tests/misc/sort". 
+	Program	only fails -g options now.
 	
 2011-1-31 James Wendt <jwendt@cs.ucla.edu>
-	* src/sort.c (general_numeric_discriminator): Now copies bytes from double
-	to discrim instead of using pointers.
+
+	* src/sort.c (general_numeric_discriminator): Now copies bytes from
+	double to discrim instead of using pointers.
 	* src/sort.c (line_discriminator): Changed byte shuffling to no longer
 	apply to general_numeric keys.
 
 2011-1-30 Kevin Deng <dengchao@gmail.com>
+
 	* src/sort.c (version_discriminator): Added discriminant generator.
 	Does not work like the other discriminants.
 
 2011-1-30 Drew Kutilek <dkutilek@ucla.edu>
+
 	* src/sort.c (numeric_discriminator): Fixed error with $INTMAX_MAX and 
 	$INTMAX_OFLOW.  Program now passes test "/tests/misc/sort-discrim".
 
 2011-1-30 James Wendt <jwendt@cs.cula.edu>
+
 	* src/sort.c (line_discriminator): Changed byte shuffling to apply to
 	general_numeric keys.
 
@@ -225,12 +270,12 @@
 
 	* src/sort.c (numeric_discriminator): Changed output type from char* to
 	uintmax_t.
-	* src/sort.c (human_numeric_discriminator): Changed output type from char*
-	to uintmax_t.
+	* src/sort.c (human_numeric_discriminator): Changed output type from
+	char* to uintmax_t.
 	* src/sort.c (general_numeric_discriminator): Changed output type from
 	char* to uintmax_t.
-	* src/sort.c (line_discriminator): Changed byte shuffling to apply only to
-	non-numeric keys.
+	* src/sort.c (line_discriminator): Changed byte shuffling to apply only
+	to non-numeric keys.
 
 2011-1-29 James Wendt <jwendt@cs.ucla.edu>
 
@@ -245,8 +290,8 @@
 	uintmax_t discriminator used for quick comparisons.
 	* src/sort.c (fillbuf): Removed precomputation of position of first key
 	since keybeg and keylim pointers are no longer in use.
-	* src/sort.c (keycompare): Computes begining and limit of key since it is no
-	longer precomputed in fillbuf.
+	* src/sort.c (keycompare): Computes begining and limit of key since it
+	is no longer precomputed in fillbuf.
 	* src/sort.c (compare): Checks if difference between discriminators is
 	non-zero, if so, return result, otherwise, function compares as before.
 	* src/sort.c (check): Load discrim instead of keybeg and keylim.
@@ -262,10 +307,10 @@
 
 	* src/sort.c (human_numeric_discriminator): New function. Returns
 	discriminator for human numeric key
-	* src/sort.c (numeric_discriminator): New function.  Returns discriminator
-	for numeric key
-	* src/sort.c (unit_order): moved global variable in order to reference it
-	previous to the old point.
+	* src/sort.c (numeric_discriminator): New function.  Returns
+	discriminator for numeric key
+	* src/sort.c (unit_order): moved global variable in order to reference
+	it previous to the old point.
 	* src/sort.c (find_unit_order): added declaration above
 	numeric_discriminator so numeric_discriminator can call it.
 
