@@ -19,7 +19,7 @@ int main (int argc, char** argv)
 
   for (i = 0; i < num_rand; i++)
     {
-      whole = (((uintmax_t) rand() << 32) | (uintmax_t) rand()) % (INTMAX_MAX >> 1);
+      whole = (((uintmax_t) rand() << 32) | (uintmax_t) rand()) % ((INTMAX_MAX >> 1) / 100);
       fraction = abs (rand()) % 100;
 
       /* Equal chance for positive or negative. */
@@ -37,19 +37,19 @@ int main (int argc, char** argv)
         }
 
       /* 10 in 21 chance of non-zero whole of random length between
-         1 and 19 digits and randomly chosen fraction. */
+         1 and 17 digits and randomly chosen fraction. */
       else if (0 < choice && choice < 11)
         {
           sprintf (buf, "%ju", whole);
-          printf ("%s%.*s.%ju\n", sign, rand() % 19 + 1, buf, fraction);
+          printf ("%s%.*s.%ju\n", sign, rand() % 17 + 1, buf, fraction);
         }
 
       /* 10 in 21 chance of non-zero whole of random length between
-         1 and 19 digits and no fraction. */
+         1 and 17 digits and no fraction. */
       else
         {
           sprintf (buf, "%ju", whole);
-          printf ("%s%.*s\n", sign, rand() % 19 + 1, buf);
+          printf ("%s%.*s\n", sign, rand() % 17 + 1, buf);
         }
     }
 

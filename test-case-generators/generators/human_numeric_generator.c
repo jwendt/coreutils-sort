@@ -21,7 +21,7 @@ int main (int argc, char** argv)
 
   for (i = 0; i < num_rand; i++)
     {
-      whole = (((uintmax_t) rand() << 32) | (uintmax_t) rand()) % (INTMAX_MAX >> 5);
+      whole = (((uintmax_t) rand() << 32) | (uintmax_t) rand()) % ((INTMAX_MAX >> 5) / 10);
       fraction = abs (rand()) % 10;
       magnitude = rand() % 10;
 
@@ -40,19 +40,19 @@ int main (int argc, char** argv)
         }
 
       /* 10 in 21 chance of non-zero whole of random length between
-         1 and 18 digits and randomly chosen fraction. */
+         1 and 16 digits and randomly chosen fraction. */
       else if (0 < choice && choice < 11)
         {
           sprintf (buf, "%ju", whole);
-          printf ("%s%.*s.%ju%c\n", sign, rand() % 18 + 1, buf, fraction, mag[magnitude]);
+          printf ("%s%.*s.%ju%c\n", sign, rand() % 16 + 1, buf, fraction, mag[magnitude]);
         }
 
       /* 10 in 21 chance of non-zero whole of random length between
-         1 and 18 digits and no fraction. */
+         1 and 16 digits and no fraction. */
       else
         {
           sprintf (buf, "%ju", whole);
-          printf ("%s%.*s%c\n", sign, rand() % 18 + 1, buf, mag[magnitude]);
+          printf ("%s%.*s%c\n", sign, rand() % 16 + 1, buf, mag[magnitude]);
         }
     }
 
